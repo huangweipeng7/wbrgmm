@@ -1,5 +1,5 @@
 % Numerical Computation of ZK as in algorithm 1
-function Zhat = numerical_Zhat(gamma_pos_mc, g_0, t, m)
+function Zhat = numerical_Zhat(gamma_pos_mc, Gamma_pos_mc, g_0, t, m)
 [p, ~, M] = size(gamma_pos_mc);
 g = zeros(m, M);
 Zhat = zeros(1, m);
@@ -8,7 +8,10 @@ for n = 1:M
         g_tmp = ones(K, K);
         for i = 1:(K - 1)
             for j = (i + 1):K
-                d = sqrt(sum((gamma_pos_mc(:, i, n) - gamma_pos_mc(:, j, n)).^2));
+                d = wasserstein(
+                    gamma_pos_mc(:, i, n), Gamma_pos_mc(:, i, n), 
+                    gamma_pos_mc(:, j, n), Gamma_pos_mc(:, j, n));
+                d = sqrt(d);
                 g_tmp(i, j) = d/(g_0 + d);
             end
         end

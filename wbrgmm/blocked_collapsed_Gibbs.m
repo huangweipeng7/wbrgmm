@@ -91,7 +91,7 @@ for iter = 2:(B + nmc)
 %             for K = (t + 1):(t + m)
 %                 log_prob(K - t) = gammaln(K + 1) - gammaln(K - t + 1) - gammaln(K + n + 1);
 %             end
-            log_prob = log_prob - max(log_prob);
+            log_prob = log_prob - max(log_prob); 
             pr = exp(log_prob);
             pr = pr/sum(pr);
             tmp = sum((rand(1, 1) >= cumsum(pr))) + 1;
@@ -114,7 +114,6 @@ for iter = 2:(B + nmc)
                 for k1 = 1:(K - 1)
                     for k2 = (k1 + 1):K
                         % d = sum((gam_star(:, k1) - gam_star(:, k2)).^2);
-                        
                         d = sqrt(
                             wasserstein(gam_star(:, k1), Gam_star(:, k1), gam_star(:, k2), Gam_star(:, k2))
                         );
@@ -154,11 +153,12 @@ for iter = 2:(B + nmc)
         end
     end
     % Step 2: Given C, re-sample (theta_1,...,theta_n) and (Gamma_1, ..., Gamma_n)
-    % Sampling K ~ p(K | t, y_1:n, Gamma_star) approximately from p(K | t)
+    % Sampling K ~ p(K | t, y_1:n, Gamma_star, Gamma_star) approximately from p(K | t)
     gam_star_1 = unique(gam(1, :));
     t = length(gam_star_1);
     n_Zhat = 500;
     gamma_pos_mc = zeros(p, t + m - 1, n_Zhat);
+    Gamma_pos_mc = zeros(p, p, t + m - 1, n_Zhat);
     for k = 1:(t + m - 1)
         if k <= t
             ind_k = ind_n(gam(1, :) == gam_star_1(k));
@@ -170,9 +170,10 @@ for iter = 2:(B + nmc)
         end
         for j = 1:p
             gamma_pos_mc(j, k, :) = mk(j) + sqrt(Vk(j, j)) * randn(1, n_Zhat);
+            % Gamma_pos_mc need to be done 
         end
     end
-    Zhat = numerical_Zhat(gamma_pos_mc, g0, t, m);
+    Zhat = numerical_Zhat(gamma_pos_mc, Gamma_pos_mc, g0, t, m);
     log_prob = zeros(1, m);
     for K = t:(t + m - 1)
         log_prob(K - t + 1) = Zhat(K - t + 1) - Z(K) + gammaln(K + 1) - gammaln(K - t + 1) - gammaln(K + n + 1);
