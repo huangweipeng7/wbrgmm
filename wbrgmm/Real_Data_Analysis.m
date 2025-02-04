@@ -6,13 +6,13 @@ Y_faithful = csvread('faithful_data.csv', 1, 1);
 [n, p] = size(Y_faithful);
 a0 = 1; b0 = 1; lsig2 = 0.01; 
 usig2 = 10000; B = 1000; nmc = 1000; 
-tau = 10; g0 = 1; m = 2;
-t = 5;
+tau = 1; g0 = 500; m = 2;
+t = 10;
 K_max = 20;
 log_V = log_V_nt(n, K_max);
 Z = numerical_ZK(K_max, tau, p, g0);
 tic;
-[gamma_mc, Gamma_mc, K_mc] = blocked_collapsed_Gibbs(Y_faithful', B, nmc, log_V, a0, b0, tau, g0, lsig2, usig2, Z);
+[gamma_mc, Gamma_mc, K_mc] = blocked_collapsed_Gibbs(Y_faithful', B, nmc, log_V, a0, b0, tau, g0, lsig2, usig2, Z, m);
 toc;
 plot(K_mc)
 % g0_seq = 1:10;

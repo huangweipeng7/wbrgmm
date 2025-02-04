@@ -15,9 +15,7 @@ function Z = numerical_ZK(K_max, tau, p, g_0)
             g_tmp = ones(K, K);
             for i = 1:(K - 1)
                 for j = (i + 1):K
-                    d = wasserstein(
-                            mu_mc(:, i, m), Sig_mc(:, :, i, m), mu_mc(:, j, m), Sig_mc(:, :, j, m));
-                    d = sqrt(d);
+                    d = wasserstein(mu_mc(:, i, m), Sig_mc(:, :, i, m), mu_mc(:, j, m), Sig_mc(:, :, j, m));
                     g_tmp(i, j) = d/(g_0 + d);
                 end
             end

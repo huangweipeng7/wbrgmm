@@ -1,5 +1,5 @@
 function [gamma_mc, Gamma_mc, K_mc] = blocked_collapsed_Gibbs(...
-    Y, B, nmc, log_V, a0, b0, tau, g0, lsig2, usig2, Z)
+    Y, B, nmc, log_V, a0, b0, tau, g0, lsig2, usig2, Z, m)
 %% Description: Generalized-Urn-Model-based sampler for Repulsive MFM
 %% Input:
 %  Observations (yi)ni=1;
@@ -23,7 +23,7 @@ K_mc = zeros(1, B + nmc);
 reject_time = zeros(1, B + nmc);
 for k = 1:K
     Sigma_init(:, :, k) = eye(p, p);
-end
+end 
 gam = zeros(p, n);
 Gam = zeros(p, p, n);
 for i = 1:n
@@ -34,9 +34,9 @@ for i = 1:n
 end
 gamma_mc(:, :, 1) = gam;
 Gamma_mc(:, :, :, 1) = Gam;
-K_mc(1) = K;
-m = 2;
-% tic;
+K_mc(1) = K; 
+tic;
+
 %% Gibbs sampling
 for iter = 2:(B + nmc) 
     gam = gamma_mc(:, :, iter - 1); % gam is gamma
@@ -59,7 +59,7 @@ for iter = 2:(B + nmc)
         for k = 1:t
             j = 1;
             while (gam_minus_i(1, j) ~= gam_star_1(k))
-                j = j + 1;numerical_Zhat
+                j = j + 1;  
             end
             N(k) = sum(gam_minus_i(1, :) == gam_star_1(k));
             gam_star(:, k) = gam_minus_i(:, j);
@@ -96,31 +96,31 @@ for iter = 2:(B + nmc)
             pr = pr/sum(pr);
             tmp = sum((rand(1, 1) >= cumsum(pr))) + 1;
             K = t + tmp;
-            % Sample extra components that are not associated with observations
-            for k = (t + 1): K
-                lambda = gamrnd(a0, 1/b0, p, 1);
-                while ((min(lambda) < usig2^(-1)) || (max(lambda) > lsig2^(-1)))
-                    lambda = gamrnd(a0, 1/b0, p, 1);
-                end
-                Gam_star(:, :, k) = eye(p, p)/diag(lambda);
-            end
+
 
             % Accept-Reject sampling from gamma_star associated with no observations
-
             g = zeros(K, K);
             while (rand(1) >= min(min(g)))
                 gam_star(:, (t + 1): K) = tau/2 * randn(p, K - t);
+
+                % Sample extra components that are not associated with observations
+                for k = (t + 1): K
+                    lambda = gamrnd(a0, 1/b0, p, 1);
+                    while ((min(lambda) < usig2^(-1)) || (max(lambda) > lsig2^(-1)))
+                        lambda = gamrnd(a0, 1/b0, p, 1);
+                    end
+                    Gam_star(:, :, k) = eye(p, p)/diag(lambda);
+                end
+                
                 g = ones(K, K);
                 for k1 = 1:(K - 1)
                     for k2 = (k1 + 1):K
                         % d = sum((gam_star(:, k1) - gam_star(:, k2)).^2);
-                        d = sqrt(
-                            wasserstein(gam_star(:, k1), Gam_star(:, k1), gam_star(:, k2), Gam_star(:, k2))
-                        );
-                        g(k1, k2) = sqrt(d)/(g0 + sqrt(d));
+                        d = wasserstein(gam_star(:, k1), Gam_star(:, :, k1), gam_star(:, k2), Gam_star(:, :, k2));
+                        g(k1, k2) = d/(g0 + d);
                         g(k2, k1) = g(k1, k2); 
+                    end
                 end
-            end
             gam_star_c = gam_star(:, K);
             Gam_star_c = Gam_star(:, :, K);
         end
@@ -136,10 +136,13 @@ for iter = 2:(B + nmc)
                 log((t + n + 1) * exp(logI(1)) + (t + 1) * exp(logI(2))) - log(2 * t + n + 2);
         end
         log_pr(t + 1) = -0.5 * log(det(2 * pi *Gam_star_c)) - ...
-                0.5 * (Y(:, i)' - gam_star_c')/Gam_star_c * ...
-                (Y(:, i) - gam_star_c);
+            0.5 * (Y(:, i)' - gam_star_c')/Gam_star_c * ...
+            (Y(:, i) - gam_star_c);
+
         log_pr(t + 1) = log_pr(t + 1) + log_V(t + 1) - log_V(t) + ...
-            log((t + n + 2) * exp(logI(2)) + (t + 2) * exp(logI(3))) - log(2 * t + n + 4);
+            log((t + n + 2) * exp(logI(2)) + ...
+            (t + 2) * exp(logI(3))) - log(2 * t + n + 4);
+
         log_pr = log_pr - max(log_pr);
         pr = exp(log_pr);
         pr = pr/sum(pr);
@@ -153,36 +156,61 @@ for iter = 2:(B + nmc)
         end
     end
     % Step 2: Given C, re-sample (theta_1,...,theta_n) and (Gamma_1, ..., Gamma_n)
-    % Sampling K ~ p(K | t, y_1:n, Gamma_star, Gamma_star) approximately from p(K | t)
+    % Sampling K ~ p(K | t, y_1:n, gamma_star, Gamma_star) approximately from p(K | t)
     gam_star_1 = unique(gam(1, :));
     t = length(gam_star_1);
-    n_Zhat = 500;
+    n_Zhat = 3;
     gamma_pos_mc = zeros(p, t + m - 1, n_Zhat);
-    Gamma_pos_mc = zeros(p, p, t + m - 1, n_Zhat);
+    Gamma_pos_mc = zeros(p, p, t + m - 1, n_Zhat); 
     for k = 1:(t + m - 1)
         if k <= t
             ind_k = ind_n(gam(1, :) == gam_star_1(k));
             Vk = eye(p, p)/(eye(p, p)/Gam_star(:, :, k) * N(k) + 1/tau^2 * eye(p, p));
-            mk = Vk * (eye(p, p)/Gam_star(:, :, k) * sum(Y(:, ind_k), 2));
+            mk = Vk * (eye(p, p)/Gam_star(:, :, k) * sum(Y(:, ind_k), 2)); 
         else
             Vk = tau^2 * eye(p, p);
             mk = zeros(p, 1);
         end
+ 
         for j = 1:p
             gamma_pos_mc(j, k, :) = mk(j) + sqrt(Vk(j, j)) * randn(1, n_Zhat);
             % Gamma_pos_mc need to be done 
         end
-    end
+
+        if k <= t
+            a_k = a0 + N(k)/2;
+            ind_k = ind_n(gam(1, :) == gam_star_1(k));
+            tmp = Y(:, ind_k) - gam_star(:, k) * ones(1, length(ind_k));
+            SSE = tmp * tmp';
+        else
+            a_k = a0;
+            SSE = zeros(p, p);
+        end
+        for h = 1:n_Zhat
+            lambda = zeros(1, p);
+            for j = 1:p
+                b_k = b0 + 0.5 * SSE(j, j);
+                lambda(j) = gamrnd(a_k, 1/b_k); 
+                while (lambda(j) < usig2^(-1)) || (lambda(j) > lsig2^(-1))
+                    lambda(j) = gamrnd(a_k, 1/b_k);
+                end 
+            end
+            Gamma_pos_mc(:, :, k, h) = eye(p, p)/diag(lambda); 
+        end
+    end  
     Zhat = numerical_Zhat(gamma_pos_mc, Gamma_pos_mc, g0, t, m);
     log_prob = zeros(1, m);
+
     for K = t:(t + m - 1)
         log_prob(K - t + 1) = Zhat(K - t + 1) - Z(K) + gammaln(K + 1) - gammaln(K - t + 1) - gammaln(K + n + 1);
     end
-    log_prob = log_prob - max(log_prob);
+    log_prob = log_prob - max(log_prob); 
     pr = exp(log_prob);
     pr = pr/sum(pr);
-    tmp = sum((rand(1, 1) >= cumsum(pr))) + 1;
+    tmp = sum((rand(1, 1) >= cumsum(pr))) + 1; 
     K = t + tmp - 1;
+    % fprintf("%d %d %d \n\n", K, t, tmp)
+
     % Initialize gamma_star and Gamma_star
     gam_star = zeros(p, K);
     Gam_star = zeros(p, p, K);
@@ -198,7 +226,7 @@ for iter = 2:(B + nmc)
         gam_star(:, k) = gam(:, j);
         Gam_star(:, :, k) = Gam(:, :, j);
     end
-    % Given gamma_k_star's, sample Gamma_k_star's
+    % Given gamma_k_star, sample Gamma_k_star 
     for k = 1:K
         if k <= t
             a_k = a0 + N(k)/2;
@@ -240,12 +268,12 @@ for iter = 2:(B + nmc)
         end
         g = ones(K, K);
         for k1 = 1:(K - 1)
-            for k2 = (k1 + 1):K
-                d = sum((gam_star(:, k1) - gam_star(:, k2)).^2);
-                g(k1, k2) = sqrt(d)/(g0 + sqrt(d));
-                g(k2, k1) = g(k1, k2);
+            for k2 = (k1 + 1)
+                d = wasserstein(gam_star(:, k1), Gam_star(:, :, k1), gam_star(:, k2), Gam_star(:, :, k2));
+                g(k1, k2) = d/(g0 + d);
+                g(k2, k1) = g(k1, k2); 
             end
-        end
+        end 
     end
     reject_time(iter) = count - 1;
     % Assign newly sample theta_k^star's to each observation using previous
@@ -261,10 +289,13 @@ for iter = 2:(B + nmc)
     gamma_mc(:, :, iter) = gam;
     Gamma_mc(:, :, :, iter) = Gam;
     K_mc(iter) = K;
-    if (mod(iter, 50) == 0)
+    if (mod(iter, 50) == 0) 
         fprintf('Iteration #%d; Time Consumed: %s\n', iter, sprintf('%.0fs;', toc))
     end
 end
-fprintf('rejection rate in step 4: %s\n', sprintf('%.4f;', sum(reject_time((B + 1):(B + nmc)))/nmc));
+    
+
+% disp(sum(reject_time((B + 1):(B + nmc)))/nmc);
+% fprintf('rejection rate in step 4: %s\n', sprintf('%.4f;', sum(reject_time((B + 1):(B + nmc)))/nmc));
 % toc
 end
