@@ -9,11 +9,9 @@ NumericMatrix association(IntegerVector Z){
     for (int j = 0; j < n; j ++){
       if (Z(i) == Z(j)){
         S(i, j) = 1;
+      } else {
+        S(i, j) = 0;
       }
-      else
-        {
-          S(i, j) = 0;
-        }
     }
   }
   return(S);
@@ -27,9 +25,7 @@ NumericMatrix coclustering(NumericVector gamma, double tol){
     for (int j = 0; j < n; j ++){
       if ((gamma(i) - gamma(j) < tol) && (gamma(j) - gamma(i) < tol)){
         S(i, j) = 1;
-      }
-      else
-      {
+      } else {
         S(i, j) = 0;
       }
     }
