@@ -1,26 +1,33 @@
 function blocked_gibbs(
     X::Matrix{Float64}, prior::NormalInverseWishart;
     g₀::Float64 = 100., K::Int = 5, α::Float64 = 1., 
+    a₀::Float64 = 1., b₀::Float64 = 1.,
+    l_σ2::Float64 = 0.001, u_σ2::Float64 = 10000.,
     burnin::Int = 2000, runs::Int = 3000, thinning::Int = 1)
+
+    dim, n = size(X)
+
+    config = Dict(
+        "g₀" => g₀, "α" => α, "a₀" => a₀, "b₀" => b₀,
+        "dim" => dim, "l_σ2" => l_σ2, "u_σ2" => u_σ2)
 
     C_mc = Vector()
     Mu_mc = Vector()
     Sigma_mc = Vector()
     llhd_mc = Vector{Float64}()
 
-    dim, n = size(X)
 
     C = zeros(Int, n) 
-    Mu = zeros(Float64, K, dim)
-    Sigma = zeros(Float64, K, dim, dim)
-    initialize!(Mu, Sigma, C, prior, g₀) 
+    Mu = zeros(Float64, dim, K)
+    Sigma = zeros(Float64, dim, dim, K)
+    initialize!(Mu, Sigma, C, prior, config) 
 
     iter = ProgressBar(1:(burnin+runs))
     @inbounds for run in iter
-        llhd = post_sample_C!(X, α, Mu, Sigma, C, prior)
+        llhd = post_sample_C!(X, Mu, Sigma, C, config)
         set_description(iter, "loglikelihood: $(round(llhd, sigdigits=3))")
 
-        post_sample_repulsive_gauss!(X, Mu, Sigma, C, g₀, prior)
+        post_sample_repulsive_gauss!(X, Mu, Sigma, C, config)
         # post_sample_K()
         
         if run % thinning == 0 
@@ -37,9 +44,11 @@ end
 gumbel_max_sample(lp)::Int = argmax(lp + rand(GUMBEL, size(lp)))
 
 
-function post_sample_C!(X, α, Mu, Sigma, C, prior)::Float64
-    size(Mu, 1) == size(Sigma, 1) ||
+function post_sample_C!(X, Mu, Sigma, C, config)::Float64
+    size(Mu, 2) == size(Sigma, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions.")) 
+
+    α = get(config, "α", missing)
 
     n = size(X, 2)
     K = size(Mu, 1)    
@@ -52,7 +61,7 @@ function post_sample_C!(X, α, Mu, Sigma, C, prior)::Float64
         fill!(lp, -Inf)
         x = X[:, i]
         @inbounds for k in 1:K 
-            lp[k] = dlogpdf(MvNormal(Mu[k, :], Sigma[k, :, :]), x) 
+            lp[k] = dlogpdf(MvNormal(Mu[:, k], Sigma[:, :, k]), x) 
             n_k = sum(C .== K) - (C[i] == K)   
             lp[k] += log(n_k == 0 ? α / n_z : n_k)  
         end  
@@ -64,7 +73,7 @@ function post_sample_C!(X, α, Mu, Sigma, C, prior)::Float64
 end  
 
 
-function post_sample_gauss_kernels!(X, Mu, Sigma, C, prior)
+function post_sample_gauss_kernels!(X, Mu, Sigma, C, prior::NormalInverseWishart)
     niw_tmp = deepcopy(prior)
 
     K = size(Mu, 1)
@@ -85,22 +94,71 @@ function post_sample_gauss_kernels!(X, Mu, Sigma, C, prior)
             reset!(niw_tmp, κ₀, μ₀, ν₀, Φ₀)
             μ, Σ = rand(niw_tmp)  
         end 
-        Mu[k, :] .= μ[:] 
-        Sigma[k, :, :] .= Σ[:, :]
+        Mu[:, k] .= μ[:] 
+        Sigma[:, :, k] .= Σ[:, :]
+    end 
+end 
+
+
+function post_sample_gauss_kernels!(X, Mu, Sigma, C, config::Dict) 
+    g₀ = get(config, "g₀", missing)
+    a₀ = get(config, "a₀", missing) 
+    b₀ = get(config, "b₀", missing)
+
+    dim, K = size(Mu)  
+    gauss = MvNormal(zeros(dim), Matrix(I, dim, dim)) 
+    
+    @inbounds for k in 1:K
+        X_tmp = X[:, C.==k] 
+        n = size(X_tmp, 2) 
+
+        if n == 0 
+            Mu[:, k] .= rand(gauss)
+            Sigma[:, :, k] .= rand_inv_gamma(a₀, b₀, config)
+        else 
+            x̄ = mean(X_tmp; dims=2)  
+            Σ₀ = pinv(I + n * pinv(Sigma[:, :, k]))
+            μ₀ = Σ₀ * (n * pinv(Sigma[:, :, k]) * x̄) |> vec 
+            Mu[:, k] .= MvNormal(μ₀, Σ₀) |> rand
+
+            aₖ = a₀ + n / 2 
+            bₖ = b₀ .+ sum((X_tmp .- Mu[:, k]).^2; dims=2) / 2 |> vec
+            Sigma[:, :, k] .= rand_inv_gamma(aₖ, bₖ, config)
+        end  
     end 
 end 
  
+
+function rand_inv_gamma(α::Float64, β::Float64, config)::Diagonal
+    dim = get(config, "dim", missing)
+    return rand_inv_gamma(α, fill(β, dim), config)
+end 
+
  
-function post_sample_K()
-    return 0
+function rand_inv_gamma(α::Float64, β::Vector{Float64}, config)::Diagonal
+    dim = get(config, "dim", missing)
+    l_σ2 = get(config, "l_σ2", missing)
+    u_σ2 = get(config, "u_σ2", missing)
+
+    λs = zeros(Float64, dim)
+    @inbounds for p in 1:dim
+        σ2 = InverseGamma(α, β[p]) |> rand 
+        while σ2 > u_σ2 || σ2 < l_σ2
+            σ2 = InverseGamma(α, β[p]) |> rand 
+        end 
+        λs[p] = σ2
+    end   
+    return Diagonal(λs)
 end 
 
 
-function post_sample_repulsive_gauss!(X, Mu, Sigma, C, g₀, prior)::Int
+function post_sample_repulsive_gauss!(X, Mu, Sigma, C, config)::Int
     min_d = 0.     # min wasserstein distance
     reject_counts = 0 
+
+    g₀ = get(config, "g₀", missing)
     while rand() > min_d 
-        post_sample_gauss_kernels!(X, Mu, Sigma, C, prior)
+        post_sample_gauss_kernels!(X, Mu, Sigma, C, config)
         reject_counts += 1 
         min_d = min_wass_distance(Mu, Sigma, g₀)
     end
@@ -108,34 +166,37 @@ function post_sample_repulsive_gauss!(X, Mu, Sigma, C, g₀, prior)::Int
 end 
  
 
-function initialize!(Mu, Sigma, C, prior, g₀) 
-    size(Mu, 1) == size(Sigma, 1) ||
+function initialize!(Mu, Sigma, C, prior, config)  
+    size(Mu, 2) == size(Sigma, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions."))
     
-    K = size(Mu, 1) 
+    g₀ = get(config, "g₀", missing)
+    a₀ = get(config, "a₀", missing) 
+    b₀ = get(config, "b₀", missing)
+
+    dim, K = size(Mu) 
     min_d = 0.
+    gauss = MvNormal(zeros(dim), Matrix(I, dim, dim))
     while rand() > min_d   
-        @inbounds for k in 1:K
-            μ, Σ = rand(prior)  
-            Mu[k, :] .= μ[:] 
-            Sigma[k, :, :] .= Σ[:, :] 
+        @inbounds for k in 1:K 
+            Mu[:, k] .= rand(gauss)
+            Sigma[:, :, k] .= rand_inv_gamma(a₀, b₀, config)
         end
         min_d = min_wass_distance(Mu, Sigma, g₀) 
     end 
-
-    C[:] .= sample(1:K, length(C), replace=true)
+    C[:] .= sample(1:K, length(C), replace=true)    # Random assignments of clustering
 end 
 
 
 function min_wass_distance(Mu, Sigma, g₀)::Float64 
-    size(Mu, 1) == size(Sigma, 1) ||
+    size(Mu, 2) == size(Sigma, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions."))
 
     K = size(Mu, 1)
     min_d = Inf
     @inbounds for i = 1:K, j = (i+1):K  
         d = wass_gauss(
-            Mu[i, :], Sigma[i, :, :], Mu[j, :], Sigma[j, :, :])
+            Mu[:, i], Sigma[:, :, i], Mu[:, j], Sigma[:, :, j])
         d = d / (d + g₀)
         min_d = min(min_d, d)
     end  
