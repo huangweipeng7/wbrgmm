@@ -66,9 +66,8 @@ function post_sample_C!(X, Mu, Sigma, C, config)::Float64
             
             if n_k == 0 || c_ == -1 
                 lp[k] = dlogpdf(MvNormal(Mu[:, k], Sigma[:, :, k]), x) 
-                lp[k] += n_k == 0 ? log(α) + log_V_nt(ℓ+1) - log_V_nt(ℓ) : log(n_k+α) 
-            else
-                lp[k] = -Inf 
+                lp[k] += (n_k == 0 ? 
+                    log(α) + log_V_nt(ℓ+1) - log_V_nt(ℓ) : log(n_k+α)) 
             end 
 
             if n_k == 0 && c_ != -1
@@ -112,20 +111,20 @@ function post_sample_gauss_kernels!(X, Mu, Sigma, C, config::Dict)
 end 
  
 
-function rand_inv_gamma(α::Float64, β::Float64, config)::Diagonal
+function rand_inv_gamma(a::Float64, b::Float64, config)::Diagonal
     dim = get(config, "dim", missing)
-    return rand_inv_gamma(α, fill(β, dim), config)
+    return rand_inv_gamma(a, fill(b, dim), config)
 end 
 
  
-function rand_inv_gamma(α::Float64, β::Vector{Float64}, config)::Diagonal
+function rand_inv_gamma(a::Float64, b::Vector{Float64}, config)::Diagonal
     dim = get(config, "dim", missing)
     l_σ2 = get(config, "l_σ2", missing)
     u_σ2 = get(config, "u_σ2", missing)
 
     λs = zeros(Float64, dim)
     @inbounds for p in 1:dim
-        σ2 = InverseGamma(α, β[p]) |> rand 
+        σ2 = InverseGamma(a, b[p]) |> rand 
         while σ2 > u_σ2 || σ2 < l_σ2
             σ2 = InverseGamma(α, β[p]) |> rand 
         end 
