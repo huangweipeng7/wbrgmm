@@ -25,8 +25,8 @@ for t = 1:t_max
             %   Note: The first condition is false when a = c = -Inf
             if k >= t
                 a = c;
-                b = gammaln(k + 1) - gammaln(k - t + 1) - gammaln(k + n) ...
-                    +gammaln(k) + log(1/(exp(1) - 1)/factorial(k));
+                b = loggamma(k + 1) - loggamma(k - t + 1) - loggamma(k + n) ...
+                    + loggamma(k) + log(1/(exp(1) - 1)/factorial(k));
                 m = max(a, b);
                 if m == -Inf
                     c = -Inf;

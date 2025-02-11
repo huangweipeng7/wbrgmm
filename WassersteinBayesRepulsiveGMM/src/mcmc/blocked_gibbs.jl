@@ -1,5 +1,5 @@
 function blocked_gibbs(
-    X::Matrix{Float64}, prior::NormalInverseWishart;
+    X::Matrix{Float64};
     g₀::Float64 = 100., K::Int = 5, α::Float64 = 1., 
     a₀::Float64 = 1., b₀::Float64 = 1.,
     l_σ2::Float64 = 0.001, u_σ2::Float64 = 10000.,
@@ -20,7 +20,7 @@ function blocked_gibbs(
     C = zeros(Int, n) 
     Mu = zeros(Float64, dim, K)
     Sigma = zeros(Float64, dim, dim, K)
-    initialize!(Mu, Sigma, C, prior, config) 
+    initialize!(Mu, Sigma, C, config) 
 
     iter = ProgressBar(1:(burnin+runs))
     @inbounds for run in iter
@@ -56,49 +56,32 @@ function post_sample_C!(X, Mu, Sigma, C, config)::Float64
     n_z = K - (length ∘ unique)(C)
  
     C_prime = Vector{Int}(undef, n)
-    llhd = 0. 
+    llhd = 0.           # Log likelihood
+    c_ = -1             # a fake index value for c underscore 
     @inbounds for i in 1:n 
         fill!(lp, -Inf)
         x = X[:, i]
         @inbounds for k in 1:K 
-            lp[k] = dlogpdf(MvNormal(Mu[:, k], Sigma[:, :, k]), x) 
             n_k = sum(C .== K) - (C[i] == K)   
-            lp[k] += log(n_k == 0 ? α / n_z : n_k)  
+            
+            if n_k == 0 || c_ == -1 
+                lp[k] = dlogpdf(MvNormal(Mu[:, k], Sigma[:, :, k]), x) 
+                lp[k] += n_k == 0 ? log(α) + log_V_nt(ℓ+1) - log_V_nt(ℓ) : log(n_k+α) 
+            else
+                lp[k] = -Inf 
+            end 
+
+            if n_k == 0 && c_ != -1
+                c_ = k 
+            end            
         end  
         C_prime[i] = gumbel_max_sample(lp)
         llhd += lp[C_prime[i]]
     end 
     C[:] .= C_prime[:]
     return llhd
-end  
-
-
-function post_sample_gauss_kernels!(X, Mu, Sigma, C, prior::NormalInverseWishart)
-    niw_tmp = deepcopy(prior)
-
-    K = size(Mu, 1)
-    @inbounds for k in 1:K
-        X_tmp = X[:, C.==k] 
-        n = size(X_tmp, 2) 
-
-        if n == 0 
-            μ, Σ = rand(prior)
-        else 
-            x̄ = mean(X_tmp; dims=2)
-            κ₀ = prior.κ₀ + n  
-            ν₀ = prior.ν₀ + n 
-            μ₀ = (prior.κ₀ * prior.μ₀ + n * x̄) / κ₀ 
-            Φ₀ = prior.Φ₀ + cov(X_tmp; dims=2, corrected=false) * n + 
-                prior.κ₀ * n / κ₀ * (x̄ - prior.μ₀) * transpose(x̄ - prior.μ₀) 
-
-            reset!(niw_tmp, κ₀, μ₀, ν₀, Φ₀)
-            μ, Σ = rand(niw_tmp)  
-        end 
-        Mu[:, k] .= μ[:] 
-        Sigma[:, :, k] .= Σ[:, :]
-    end 
-end 
-
+end   
+ 
 
 function post_sample_gauss_kernels!(X, Mu, Sigma, C, config::Dict) 
     g₀ = get(config, "g₀", missing)
@@ -166,7 +149,7 @@ function post_sample_repulsive_gauss!(X, Mu, Sigma, C, config)::Int
 end 
  
 
-function initialize!(Mu, Sigma, C, prior, config)  
+function initialize!(Mu, Sigma, C, config)  
     size(Mu, 2) == size(Sigma, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions."))
     

@@ -9,10 +9,11 @@ using LinearAlgebra
 using PDMats
 using ProgressBars
 using Random 
+using SpecialFunctions
 using Statistics
-using StatsBase
+using StatsBase 
 
-include("niw.jl")
+include("logV.jl")
 include("measure/wasserstein.jl")
 include("mcmc/blocked_gibbs.jl")
 

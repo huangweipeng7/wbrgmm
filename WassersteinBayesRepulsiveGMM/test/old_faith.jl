@@ -13,15 +13,13 @@ function main()
 	data = CSV.File("faithful_data.csv") |> DataFrame 
 	X = Matrix{Float64}(data[:, 2:3]) |> transpose |> Matrix
 
-	dim = size(X, 1)
-	prior = NormalInverseWishart(
-		2, zeros(dim), 2, Matrix(1.0I, dim, dim)) 
+	dim = size(X, 1) 
 
 	g₀ = 100.  
 	α = 10.
 	K = 5
 	C_mc, Mu_mc, Sigma_mc, llhd_mc = blocked_gibbs(
-		X, prior; 
+		X; 
 		g₀=g₀, K=K, α=α, 
 		burnin=2500, runs=5000, thinning=10)
 
