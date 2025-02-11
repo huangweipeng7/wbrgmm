@@ -117,16 +117,16 @@ function rand_inv_gamma(a::Float64, b::Float64, config)::Diagonal
 end 
 
  
-function rand_inv_gamma(a::Float64, b::Vector{Float64}, config)::Diagonal
+function rand_inv_gamma(a::Float64, bb::Vector{Float64}, config)::Diagonal
     dim = get(config, "dim", missing)
     l_σ2 = get(config, "l_σ2", missing)
     u_σ2 = get(config, "u_σ2", missing)
 
     λs = zeros(Float64, dim)
     @inbounds for p in 1:dim
-        σ2 = InverseGamma(a, b[p]) |> rand 
+        σ2 = InverseGamma(a, bb[p]) |> rand 
         while σ2 > u_σ2 || σ2 < l_σ2
-            σ2 = InverseGamma(α, β[p]) |> rand 
+            σ2 = InverseGamma(a, bb[p]) |> rand 
         end 
         λs[p] = σ2
     end   
