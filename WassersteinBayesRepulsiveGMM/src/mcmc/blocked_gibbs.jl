@@ -1,8 +1,9 @@
 function blocked_gibbs(
     X::Matrix{Float64};
     g₀::Float64 = 100., K::Int = 5, α::Float64 = 1., 
-    a₀::Float64 = 1., b₀::Float64 = 1.,
+    a₀::Float64 = 1., b₀::Float64 = 1., 
     l_σ2::Float64 = 0.001, u_σ2::Float64 = 10000.,
+    t_max::Int = 5,
     burnin::Int = 2000, runs::Int = 3000, thinning::Int = 1)
 
     dim, n = size(X)
@@ -15,7 +16,7 @@ function blocked_gibbs(
     Mu_mc = Vector()
     Sigma_mc = Vector()
     llhd_mc = Vector{Float64}()
-
+    logV = logV_nt(n, t_max)
 
     C = zeros(Int, n) 
     Mu = zeros(Float64, dim, K)
@@ -24,7 +25,7 @@ function blocked_gibbs(
 
     iter = ProgressBar(1:(burnin+runs))
     @inbounds for run in iter
-        llhd = post_sample_C!(X, Mu, Sigma, C, config)
+        llhd = post_sample_C!(X, Mu, Sigma, C, logV, config)
         set_description(iter, "loglikelihood: $(round(llhd, sigdigits=3))")
 
         post_sample_repulsive_gauss!(X, Mu, Sigma, C, config)
@@ -44,40 +45,46 @@ end
 gumbel_max_sample(lp)::Int = argmax(lp + rand(GUMBEL, size(lp)))
 
 
-function post_sample_C!(X, Mu, Sigma, C, config)::Float64
+function post_sample_C!(X, Mu, Sigma, C, logV, config)::Float64
     size(Mu, 2) == size(Sigma, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions.")) 
 
     α = get(config, "α", missing)
 
     n = size(X, 2)
-    K = size(Mu, 1)    
+    K = size(Mu, 2)    
     lp = Vector{Float64}(undef, n)
-    n_z = K - (length ∘ unique)(C)
- 
-    C_prime = Vector{Int}(undef, n)
+    C_minus_i = Vector{Int}(undef, n-1)
+    inds = 1:n
+    
+    n_map = countmap(C)
+
+    # C_prime = Vector{Int}(undef, n)
     llhd = 0.           # Log likelihood
     c_ = -1             # a fake index value for c underscore 
     @inbounds for i in 1:n 
         fill!(lp, -Inf)
         x = X[:, i]
+
+        ℓ = (length ∘ unique)(C) - (sum(C .== C[i]) == 1) 
+        n_map[C[i]] -= 1
         @inbounds for k in 1:K 
-            n_k = sum(C .== K) - (C[i] == K)   
-            
+            n_k = sum(C .== K) - (C[i] == K) 
             if n_k == 0 || c_ == -1 
                 lp[k] = dlogpdf(MvNormal(Mu[:, k], Sigma[:, :, k]), x) 
-                lp[k] += (n_k == 0 ? 
-                    log(α) + log_V_nt(ℓ+1) - log_V_nt(ℓ) : log(n_k+α)) 
+                lp[k] += (n_k == 0 ? log(α) + logV[ℓ+1] - logV[ℓ] : log(n_k+α)) 
             end 
 
             if n_k == 0 && c_ != -1
                 c_ = k 
             end            
         end  
-        C_prime[i] = gumbel_max_sample(lp)
-        llhd += lp[C_prime[i]]
+        kᵢ = gumbel_max_sample(lp)
+        C[i] = kᵢ
+        n_map[kᵢ] = get(n_map, kᵢ, 0) + 1
+        llhd += lp[kᵢ]
     end 
-    C[:] .= C_prime[:]
+    # C[:] .= C_prime[:]
     return llhd
 end   
  
