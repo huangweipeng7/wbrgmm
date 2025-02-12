@@ -21,7 +21,7 @@ function blocked_gibbs(
     C = zeros(Int, n) 
     Mu = zeros(Float64, dim, K)
     Sigma = zeros(Float64, dim, dim, K)
-    initialize!(Mu, Sigma, C, config) 
+    initialize!(X, Mu, Sigma, C, config) 
 
     iter = ProgressBar(1:(burnin+runs))
     @inbounds for run in iter
@@ -155,10 +155,12 @@ function post_sample_repulsive_gauss!(X, Mu, Sigma, C, config)::Int
 end 
  
 
-function initialize!(Mu, Sigma, C, config)  
+function initialize!(X, Mu, Sigma, C, config)  
     size(Mu, 2) == size(Sigma, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions."))
     
+    n = size(X, 2)
+
     g₀ = get(config, "g₀", missing)
     a₀ = get(config, "a₀", missing) 
     b₀ = get(config, "b₀", missing)
@@ -173,7 +175,13 @@ function initialize!(Mu, Sigma, C, config)
         end
         min_d = min_wass_distance(Mu, Sigma, g₀) 
     end 
-    C[:] .= sample(1:K, length(C), replace=true)    # Random assignments of clustering
+ 
+    @inbounds for i = 1:n 
+        C[i] = map(
+            k -> dlogpdf(MvNormal(Mu[:, k], Sigma[:, :, k]), X[:, i]),
+            1:K
+        ) |> argmax
+    end 
 end 
 
 
