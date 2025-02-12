@@ -57,9 +57,9 @@ function post_sample_C!(X, Mu, Sigma, C, logV, config)::Float64
     C_minus_i = Vector{Int}(undef, n-1)
     inds = 1:n
     
+    logpdf_K = log_p_K(K, n)
     n_map = countmap(C)
-
-    # C_prime = Vector{Int}(undef, n)
+ 
     llhd = 0.           # Log likelihood
     c_ = -1             # a fake index value for c underscore 
     @inbounds for i in 1:n 
@@ -68,6 +68,15 @@ function post_sample_C!(X, Mu, Sigma, C, logV, config)::Float64
 
         ℓ = (length ∘ unique)(C) - (sum(C .== C[i]) == 1) 
         n_map[C[i]] -= 1
+
+        # Sample K 
+        if length(logpdf_K) < ℓ + t_max
+            log_p_k_extend!(logpdf_K, ℓ + t_max - length(logpdf_K))
+        end 
+        k_part = gumbel_max_sample(logpdf_K[ℓ, ℓ+t_max])
+        K = ℓ + k_part - 1
+        K = sample_K(logpdf_K, ℓ, t_max)
+
         @inbounds for k in 1:K 
             n_k = sum(C .== K) - (C[i] == K) 
             if n_k == 0 || c_ == -1 
@@ -87,7 +96,23 @@ function post_sample_C!(X, Mu, Sigma, C, logV, config)::Float64
     # C[:] .= C_prime[:]
     return llhd
 end   
- 
+
+
+function sample_K(logpdf_K, ℓ, t_max)::Int
+    if length(logpdf_K) < ℓ + t_max
+        log_p_k_extend!(logpdf_K, ℓ + t_max - length(logpdf_K))
+    end  
+    return ℓ + gumbel_max_sample(logpdf_K[ℓ, ℓ+t_max]) - 1
+end 
+
+
+function post_sample_K(logpdf_K, ℓ, t_max)::Int
+    if length(logpdf_K) < ℓ + t_max
+        log_p_k_extend!(logpdf_K, ℓ + t_max - length(logpdf_K))
+    end  
+    return ℓ + gumbel_max_sample(logpdf_K[ℓ, ℓ+t_max]) - 1
+end 
+
 
 function post_sample_gauss_kernels!(X, Mu, Sigma, C, config::Dict) 
     g₀ = get(config, "g₀", missing)

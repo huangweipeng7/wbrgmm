@@ -13,6 +13,7 @@ using SpecialFunctions
 using Statistics
 using StatsBase 
 
+include("log_p_K.jl")
 include("logV.jl")
 include("measure/wasserstein.jl")
 include("mcmc/blocked_gibbs.jl")
