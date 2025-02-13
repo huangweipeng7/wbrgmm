@@ -15,6 +15,7 @@ using StatsBase
 
 include("log_p_K.jl")
 include("logV.jl")
+include("mc_ZK.jl")
 include("measure/wasserstein.jl")
 include("mcmc/blocked_gibbs.jl")
 

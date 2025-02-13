@@ -18,6 +18,8 @@ function blocked_gibbs(
     llhd_mc = Vector{Float64}()
     logV = logV_nt(n, t_max)
 
+    Zₖ = numerical_ZK(20, dim, config)
+
     C = zeros(Int, n) 
     Mu = zeros(Float64, dim, K)
     Sigma = zeros(Float64, dim, dim, K)
