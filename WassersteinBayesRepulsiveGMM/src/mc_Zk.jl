@@ -11,7 +11,7 @@ function numerical_ZK(K_max, dim, config)
         Σ_mc[:, :, k, n] .= rand_inv_gamma(a₀, b₀, config)
     end 
 
-    g = zeros(K_max, n_mc)
+    gg = zeros(K_max, n_mc)
     # g_tmp = ones(K, K)
     @inbounds for n = 1:n_mc, k = 2:K_max
         # fill!(g_tmp, 1)
@@ -21,12 +21,12 @@ function numerical_ZK(K_max, dim, config)
                 μ_mc[:, i, n], Σ_mc[:, :, i, n], 
                 μ_mc[:, j, n], Σ_mc[:, :, j, n])
             # g_tmp[i, j] = d / (g₀ + d) 
-            min_d = min(min_d, d / (g₀ + d))
+            min_d = min(min_d, d/(g₀+d))
         end
-        g[k, n] = min_d # minimum(g_tmp)
+        gg[k, n] = min_d # minimum(g_tmp)
     end
      
-    Z = log.(mean(g; dims=2)) |> vec
+    Z = log.(mean(gg; dims=2)) |> vec
     Z[1] = 0
     return Z
 end

@@ -108,11 +108,15 @@ function sample_K(logpdf_K, ℓ, t_max)::Int
 end 
 
 
-function post_sample_K(logpdf_K, ℓ, t_max)::Int
-    if length(logpdf_K) < ℓ + t_max
-        log_p_k_extend!(logpdf_K, ℓ + t_max - length(logpdf_K))
-    end  
-    return ℓ + gumbel_max_sample(logpdf_K[ℓ, ℓ+t_max]) - 1
+function post_sample_K(logpdf_K, Ẑ, Zₖ, ℓ, t_max)::Int
+    # if length(logpdf_K) < ℓ + t_max
+    #     log_p_k_extend!(logpdf_K, ℓ + t_max - length(logpdf_K))
+    # end 
+
+    # Note that logpdf_K and Zₖ are precomputed, while Ẑ will be updated accordingly 
+    return ℓ + gumbel_max_sample(
+        logpdf_K[ℓ, ℓ+t_max] .+ Ẑ .- Zₖ[ℓ, ℓ+t_max]
+    ) - 1
 end 
 
 
