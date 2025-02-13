@@ -1,8 +1,8 @@
-compute_log_prob(k::Int, n::Int) = 
-	logfactorial(k) - logfactorial(k) - logfactorial(k+n)
+compute_log_prob(k::Int, ℓ::Int, n::Int) = 
+	logfactorial(k) - logfactorial(k-ℓ) - logfactorial(k+n)
 
 
-log_p_K(K::Int, n::Int)::Vector{Float64} = compute_log_prob.(1:K, Ref(n))
+log_p_K(K::Int, ℓ::Int, n::Int)::Vector{Float64} = compute_log_prob.(ℓ:K, Ref(ℓ), Ref(n))
 
 
 function log_p_k_extend!(lp::Vector{Float64}, T::Int, n::Int)
