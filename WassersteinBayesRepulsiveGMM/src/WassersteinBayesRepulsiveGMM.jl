@@ -4,6 +4,7 @@ export blocked_gibbs, NormalInverseWishart
 
 import Base.rand
 
+using Profile
 using Distributions 
 using LinearAlgebra
 using PDMats

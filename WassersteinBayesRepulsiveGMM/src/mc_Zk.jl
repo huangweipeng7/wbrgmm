@@ -1,6 +1,6 @@
 # Numerical Computation of ZK as in algorithm 1
 function numerical_ZK(
-    K_max::Int, dim::Int, config::Dict; n_mc::Int = 2500)
+    K_max::Int, dim::Int, config::Dict; n_mc::Int = 500)
     g₀ = config["g₀"]
     a₀ = config["a₀"]
     b₀ = config["b₀"]

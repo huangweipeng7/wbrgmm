@@ -3,7 +3,7 @@ function blocked_gibbs(
     g₀::Float64 = 100., α::Float64 = 1., 
     a₀::Float64 = 1., b₀::Float64 = 1., 
     l_σ2::Float64 = 0.001, u_σ2::Float64 = 10000.,
-    K::Int = 5, t_max::Int = 5,
+    K::Int = 5, t_max::Int = 2,
     burnin::Int = 2000, runs::Int = 3000, thinning::Int = 1)
 
     dim, n = size(X)
@@ -59,15 +59,13 @@ function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, config)::Float64
     g₀ = config["g₀"]
 
     n = size(X, 2)
-    K = size(Mu, 2)    
-    lp = Vector(undef, n) 
+    K = size(Mu, 2)     
 
     llhd = 0.           # Log likelihood
-    c_ = -1             # a fake index value for c underscore 
-    @inbounds for i in 1:n 
-        fill!(lp, -Inf)
+    @inbounds for i in 1:n  
         x = X[:, i]
 
+        # Some bugs here
         n_map = countmap(C) 
         ℓ = (length ∘ unique)(C) - (sum(C .== C[i]) == 1) 
         n_map[C[i]] -= 1
@@ -80,7 +78,7 @@ function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, config)::Float64
         # Therefore, we use K+1
         Mu_ = zeros(dim, K+1)
         Sig_ = zeros(dim, dim, K+1)
-        nz_K = keys(n_map) |> collect |> sort 
+        nz_K = keys(n_map) |> collect  
 
         ℓ = length(nz_K)
         Mu_[:, 1:ℓ] .= Mu[:, nz_K]
@@ -98,26 +96,17 @@ function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, config)::Float64
 
         Mu, Sig = Mu_, Sig_ 
 
-        @inbounds for k in 1:K 
+        lp = Vector(undef, K+1)
+        @inbounds for k in 1:K+1 
             n_k = sum(C .== K) - (C[i] == K) 
-            if n_k == 0 || c_ == -1 
-                # println(Mu[:, k], Sig[:, :, k], "..!!..!!  ", k, "  ", K)
-                lp[k] = dlogpdf(MvNormal(Mu[:, k], Sig[:, :, k]), x) 
-                lp[k] += (n_k == 0 ? log(α) + logV[ℓ+1] - logV[ℓ] : log(n_k+α)) 
-            end 
-
-            if n_k == 0 && c_ != -1
-                c_ = k 
-            end            
+            lp[k] = dlogpdf(MvNormal(Mu[:, k], Sig[:, :, k]), x) 
+            lp[k] += (k != K+1 ? log(n_k+α) : log(α) + logV[ℓ+1] - logV[ℓ])             
         end  
         kᵢ = gumbel_max_sample(lp)
-        
-        n_map = countmap(C) 
-        println(n_map)
-        n_map[kᵢ] = get(n_map, kᵢ, 0) + 1 
-
-        nz_K = keys(n_map) |> collect |> sort
-
+        C[i] = kᵢ 
+ 
+        n_map = countmap(C)    
+        nz_K = keys(n_map) |> collect  
         ℓ = length(nz_K)
 
         Mu_mc, Sig_mc = post_sample_gauss_kernels_mc(X, ℓ, t_max, Mu, Sig, C, config)
@@ -141,8 +130,7 @@ function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, config)::Float64
         post_sample_repulsive_gauss!(X, Mu_, Sig_, C, config)
 
         Mu, Sig = Mu_, Sig_ 
-
-
+ 
         llhd += lp[kᵢ]
     end  
     return llhd
@@ -175,10 +163,10 @@ function post_sample_K(logpdf_K, Ẑ, Zₖ, ℓ, t_max)::Int
         logpdf_K .+ Ẑ .- Zₖ[ℓ:ℓ+t_max-1]
     )
     
-    println("ℓ: $ℓ, t_max: $t_max")
-    println("wah...", size(logpdf_K), " ", size(Ẑ), " ", t_max)
-    println(logpdf_K .+ Ẑ .- Zₖ[ℓ:ℓ+t_max-1], "  post   ", logpdf_K)
-    println("k: $k \n\n")
+    # println("ℓ: $ℓ, t_max: $t_max")
+    # println("wah...", size(logpdf_K), " ", size(Ẑ), " ", t_max)
+    # println(logpdf_K .+ Ẑ .- Zₖ[ℓ:ℓ+t_max-1], "  post   ", logpdf_K)
+    # println("k: $k \n\n")
     # Note that logpdf_K and Zₖ are precomputed, while Ẑ will be updated accordingly 
     return ℓ + k - 1
 end 
@@ -213,7 +201,7 @@ function post_sample_gauss_kernels!(X, Mu, Sig, C, config::Dict)
 end 
  
 
-function post_sample_gauss_kernels_mc(X, ℓ, t_max, Mu, Sig, C, config::Dict; n_mc=500) 
+function post_sample_gauss_kernels_mc(X, ℓ, t_max, Mu, Sig, C, config::Dict; n_mc=100) 
     g₀ = config["g₀"] 
     a₀ = config["a₀"] 
     b₀ = config["b₀"]
@@ -246,7 +234,6 @@ function post_sample_gauss_kernels_mc(X, ℓ, t_max, Mu, Sig, C, config::Dict; n
                 bₖ = b₀ .+ sum((X_tmp .- Mu_mc[:, k, mc]).^2; dims=2) / 2 |> vec
                 tmp_Sig = rand_inv_gamma(aₖ, bₖ, config)
                 Sig_mc[:, :, k, mc] .= tmp_Sig 
-                @assert all(diag(Sig_mc[:, :, k, mc]) .> 0) println(diag(Sig_mc[:, :, k, mc]), " ah? ",   Sig_mc[:, :, K, mc], "  ", tmp_Sig, "  oh my")
             end
         end  
     end 

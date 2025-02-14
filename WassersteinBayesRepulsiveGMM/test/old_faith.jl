@@ -5,6 +5,8 @@ using Random
 using Plots
 using WassersteinBayesRepulsiveGMM  
 
+using BenchmarkTools
+using Profile
 
 Random.seed!(100)
 
@@ -18,17 +20,19 @@ function main()
 	g₀ = 100.  
 	α = 10.
 	K = 5
-	C_mc, Mu_mc, Sigma_mc, llhd_mc = blocked_gibbs(
-		X; 
-		g₀=g₀, K=K, α=α, 
-		burnin=2500, runs=5000, thinning=10)
+	@profile begin 
+		# C_mc, Mu_mc, Sigma_mc, llhd_mc = 
+		blocked_gibbs(
+			X; g₀=g₀, K=K, α=α, 
+			burnin=0, runs=50, thinning=10)
+	end 
+	# println(C_mc[end])
+	# # println(Mu_mc[950:end])
+	# # println(Sigma_mc[950:end])
 
-	println(C_mc[end])
-	# println(Mu_mc[950:end])
-	# println(Sigma_mc[950:end])
-
-	p = plot(1:length(llhd_mc), llhd_mc)
-	savefig(p, "test.pdf")
+	# p = plot(1:length(llhd_mc), llhd_mc)
+	# savefig(p, "test.pdf")
+	Profile.print(format=:flat)
 end 
 
 
