@@ -13,12 +13,12 @@ Random.seed!(100)
 
 function main()
 	data = CSV.File("faithful_data.csv") |> DataFrame 
-	X = Matrix{Float64}(data[:, 2:3]) |> transpose |> Matrix
+	X = Matrix{Float32}(data[:, 2:3]) |> transpose |> Matrix
 
 	dim = size(X, 1) 
-
-	g₀ = 10.  
-	α = 1.
+	
+	g₀ = 100f0  
+	α = 10f0
 	K = 5
 
 	# Profile.init()
