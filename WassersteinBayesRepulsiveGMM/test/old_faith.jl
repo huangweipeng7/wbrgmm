@@ -17,22 +17,24 @@ function main()
 
 	dim = size(X, 1) 
 
-	g₀ = 100.  
-	α = 10.
+	g₀ = 10.  
+	α = 1.
 	K = 5
-	@profile begin 
-		# C_mc, Mu_mc, Sigma_mc, llhd_mc = 
+
+	# Profile.init()
+	# @profile begin 
+	C_mc, Mu_mc, Sigma_mc, llhd_mc = 
 		blocked_gibbs(
 			X; g₀=g₀, K=K, α=α, 
-			burnin=0, runs=50, thinning=10)
-	end 
-	# println(C_mc[end])
+			burnin=1000, runs=1500, thinning=10)
+	# end 
+	println(C_mc[end])
 	# # println(Mu_mc[950:end])
 	# # println(Sigma_mc[950:end])
 
-	# p = plot(1:length(llhd_mc), llhd_mc)
-	# savefig(p, "test.pdf")
-	Profile.print(format=:flat)
+	p = plot(1:length(llhd_mc), llhd_mc)
+	savefig(p, "test.pdf")
+    # Profile.print(format=:flat, groupby=:task)
 end 
 
 

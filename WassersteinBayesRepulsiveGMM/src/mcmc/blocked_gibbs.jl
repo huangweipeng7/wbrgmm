@@ -2,7 +2,7 @@ function blocked_gibbs(
     X::Matrix{Float64};
     g₀::Float64 = 100., α::Float64 = 1., 
     a₀::Float64 = 1., b₀::Float64 = 1., 
-    l_σ2::Float64 = 0.001, u_σ2::Float64 = 10000.,
+    l_σ2::Float64 = 0.001, u_σ2::Float64 = 1000.,
     K::Int = 5, t_max::Int = 2,
     burnin::Int = 2000, runs::Int = 3000, thinning::Int = 1)
 
@@ -19,8 +19,8 @@ function blocked_gibbs(
     llhd_mc = Vector()
   
     C = zeros(Int, n) 
-    Mu = zeros(dim, K+1)
-    Sig = zeros(dim, dim, K+1)
+    Mu = zeros(Float64, dim, K+1)
+    Sig = zeros(Float64, dim, dim, K+1)
     initialize!(X, Mu, Sig, C, config) 
 
     logV = logV_nt(n, t_max)
@@ -33,7 +33,7 @@ function blocked_gibbs(
         set_description(
             iter, "loglikelihood: $(round(llhd, sigdigits=3))")
 
-        post_sample_repulsive_gauss!(X, Mu, Sig, C, config) 
+        # post_sample_repulsive_gauss!(X, Mu, Sig, C, config) 
         
         if run % thinning == 0 
             push!(C_mc, deepcopy(C))
@@ -61,13 +61,14 @@ function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, config)::Float64
     n = size(X, 2)
     K = size(Mu, 2)     
 
+    lp = Vector{Float64}(undef, K+1)
     llhd = 0.           # Log likelihood
     @inbounds for i in 1:n  
         x = X[:, i]
 
         # Some bugs here
         n_map = countmap(C) 
-        ℓ = (length ∘ unique)(C) - (sum(C .== C[i]) == 1) 
+        ℓ = length(n_map) - (sum(C .== C[i]) == 1) 
         n_map[C[i]] -= 1
 
         # Sample K 
@@ -76,62 +77,59 @@ function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, config)::Float64
 
         # Always leave a place for a new cluster 
         # Therefore, we use K+1
-        Mu_ = zeros(dim, K+1)
-        Sig_ = zeros(dim, dim, K+1)
+        Mu_ = zeros(Float64, dim, K+1)
+        Sig_ = zeros(Float64, dim, dim, K+1)
         nz_K = keys(n_map) |> collect  
 
         ℓ = length(nz_K)
         Mu_[:, 1:ℓ] .= Mu[:, nz_K]
         Sig_[:, :, 1:ℓ] .= Sig[:, :, nz_K]
 
-        Mu_[:, end] .= Mu[:, end]
-        Sig_[:, :, end] .= Sig[:, :, end]
-
-        for (i_nz, nz_k) in enumerate(nz_K)
+        # Mu_[:, end] .= Mu[:, end]
+        # Sig_[:, :, end] .= Sig[:, :, end]
+        @inbounds for (i_nz, nz_k) in enumerate(nz_K)
             C[C .== nz_k] .= -1 * i_nz  # ensure there is no index collision
         end 
         C[i] = 0
         C .*= -1
         sample_repulsive_gauss!(X, Mu_, Sig_, C, ℓ, config)
+        # println(nz_K, " ", K, " ", Sig, " ", Sig_)
 
+        resize!(lp, K+1) 
         Mu, Sig = Mu_, Sig_ 
-
-        lp = Vector(undef, K+1)
         @inbounds for k in 1:K+1 
-            n_k = sum(C .== K) - (C[i] == K) 
+            n_k = sum(C .== k) - (C[i] == k) 
             lp[k] = dlogpdf(MvNormal(Mu[:, k], Sig[:, :, k]), x) 
             lp[k] += (k != K+1 ? log(n_k+α) : log(α) + logV[ℓ+1] - logV[ℓ])             
         end  
-        kᵢ = gumbel_max_sample(lp)
-        C[i] = kᵢ 
+        # println(lp, "  ", exp.(lp .- maximum(lp)) / sum(exp.(lp .- maximum(lp))))
+        C[i] = gumbel_max_sample(lp) 
  
         n_map = countmap(C)    
         nz_K = keys(n_map) |> collect  
         ℓ = length(nz_K)
 
-        Mu_mc, Sig_mc = post_sample_gauss_kernels_mc(X, ℓ, t_max, Mu, Sig, C, config)
-        Ẑ = numerical_Zhat(Mu_mc, Sig_mc, g₀, ℓ, t_max)
+        # Mu_mc, Sig_mc = post_sample_gauss_kernels_mc(X, ℓ, t_max, Mu, Sig, C, config)
+        # Ẑ = numerical_Zhat(Mu_mc, Sig_mc, g₀, ℓ, t_max)
         logpdf_K = log_p_K(ℓ+t_max-1, ℓ, n)
-        K = post_sample_K(logpdf_K, Ẑ, Zₖ, ℓ, t_max) 
+        # K_ = post_sample_K(logpdf_K, Ẑ, Zₖ, ℓ, t_max) 
+        K_ = sample_K(logpdf_K, ℓ, t_max, n) 
+        println("$K $K_  iter: $i")
 
-        Mu_ = zeros(dim, K+1)
-        Sig_ = zeros(dim, dim, K+1)
+        Mu_ = zeros(dim, K_+1)
+        Sig_ = zeros(dim, dim, K_+1)  
 
-        # Mu_[:, 1:end-1] .= Mu[:, nz_K]
-        # Sig_[:, :, 1:end-1] .= Sig[:, :, nz_K]
-
-        # Mu_[:, end] .= Mu[:, z_k]
-        # Sig_[:, :, end] .= Sig[:, :, z_k]
-
-        for (i_nz, nz_k) in enumerate(nz_K)
+        @inbounds for (i_nz, nz_k) in enumerate(nz_K)
             C[C .== nz_k] .= -1 * i_nz  # ensure there is no index collision
         end 
         C .*= -1
+        Mu_[:, 1:ℓ] .= Mu[:, nz_K]
+        Sig_[:, :, 1:ℓ] .= Sig[:, :, nz_K]
         post_sample_repulsive_gauss!(X, Mu_, Sig_, C, config)
 
         Mu, Sig = Mu_, Sig_ 
  
-        llhd += lp[kᵢ]
+        llhd += lp[C[i]]
     end  
     return llhd
 end   
@@ -188,14 +186,17 @@ function post_sample_gauss_kernels!(X, Mu, Sig, C, config::Dict)
             Mu[:, k] .= rand(gauss)
             Sig[:, :, k] .= rand_inv_gamma(a₀, b₀, config)
         else 
-            x̄ = mean(X_tmp; dims=2)  
-            Σ₀ = pinv(I + n * pinv(Sig[:, :, k]))
-            μ₀ = Σ₀ * (n * pinv(Sig[:, :, k]) * x̄) |> vec 
-            Mu[:, k] .= MvNormal(μ₀, Σ₀) |> rand
-
             aₖ = a₀ + n / 2 
             bₖ = b₀ .+ sum((X_tmp .- Mu[:, k]).^2; dims=2) / 2 |> vec
             Sig[:, :, k] .= rand_inv_gamma(aₖ, bₖ, config)
+
+            x̄ = mean(X_tmp; dims=2)  
+            Σ₀ = inv(I + n * inv(Sig[:, :, k]))
+            μ₀ = Σ₀ * (n * inv(Sig[:, :, k]) * x̄) |> vec 
+
+            print(Sig[:, :, k], "  ", Σ₀, " ", (n * inv(Sig[:, :, k]) * x̄))
+            println(x̄, "  ", μ₀)
+            Mu[:, k] .= MvNormal(μ₀, Σ₀) |> rand
         end  
     end 
 end 
@@ -230,10 +231,9 @@ function post_sample_gauss_kernels_mc(X, ℓ, t_max, Mu, Sig, C, config::Dict; n
             Mu_mc[:, k, :] .= rand(MvNormal(μ₀, Σ₀), n_mc)
 
             aₖ = a₀ + n / 2 
+            bₖ = b₀ .+ sum((X_tmp .- Mu[:, k]).^2; dims=2) / 2 |> vec
             @inbounds for mc = 1:n_mc 
-                bₖ = b₀ .+ sum((X_tmp .- Mu_mc[:, k, mc]).^2; dims=2) / 2 |> vec
-                tmp_Sig = rand_inv_gamma(aₖ, bₖ, config)
-                Sig_mc[:, :, k, mc] .= tmp_Sig 
+                Sig_mc[:, :, k, mc] .= rand_inv_gamma(aₖ, bₖ, config; n=n_mc) 
             end
         end  
     end 
@@ -241,24 +241,26 @@ function post_sample_gauss_kernels_mc(X, ℓ, t_max, Mu, Sig, C, config::Dict; n
 end 
 
 
-function rand_inv_gamma(a::Float64, b::Float64, config)::Diagonal
+function rand_inv_gamma(a::Float64, b::Float64, config; n=1)::Diagonal
     dim = get(config, "dim", missing)
-    return rand_inv_gamma(a, fill(b, dim), config)
+    return rand_inv_gamma(a, fill(b, dim), config; n=n)
 end 
 
  
-function rand_inv_gamma(a::Float64, bb::Vector{Float64}, config)::Diagonal
+function rand_inv_gamma(a::Float64, bb::Vector{Float64}, config; n=1)::Diagonal
     dim = config["dim"]
     l_σ2 = config["l_σ2"]
     u_σ2 = config["u_σ2"]
 
     λs = zeros(dim)
     @inbounds for p in 1:dim
-        σ2 = InverseGamma(a, bb[p]) |> rand 
-        while σ2 > u_σ2 || σ2 < l_σ2
-            σ2 = InverseGamma(a, bb[p]) |> rand 
-        end 
-        λs[p] = σ2
+        # σ2 = InverseGamma(a, bb[p]) |> rand 
+        # while σ2 > u_σ2 || σ2 < l_σ2
+        #     σ2 = InverseGamma(a, bb[p]) |> rand 
+        # end 
+        # λs[p] = σ2
+        σ2 = truncated(Gamma(a, 1/bb[p]), l_σ2, u_σ2) |> rand
+        λs[p] = 1/σ2
     end   
     return Diagonal(λs)
 end 
@@ -272,7 +274,7 @@ function sample_repulsive_gauss!(X, Mu, Sig, C, ℓ, config)
     dim = config["dim"]
 
     K = size(Mu, 2)
-    N = MvNormal(zeros(dim), Matrix(I, dim, dim))
+    N = MvNormal(zeros(dim), I(dim))
     while rand() > min_d   
         @inbounds for k in ℓ+1:K 
             Mu[:, k] .= rand(N)
@@ -317,12 +319,13 @@ function initialize!(X, Mu, Sig, C, config)
         end
         min_d = min_wass_distance(Mu, Sig, g₀) 
     end 
+    C[:] .= sample(1:K-1, n, replace=true)
  
-    N(k) = MvNormal(Mu[:, k], Sig[:, :, k])
-    @inbounds for i = 1:n 
-        # Make sure that the last cluster is not assigned anything 
-        C[i] = map(k -> dlogpdf(N(k), X[:, i]), 1:K-1) |> argmax
-    end 
+    # N(k) = MvNormal(Mu[:, k], Sig[:, :, k])
+    # @inbounds for i = 1:n 
+    #     # Make sure that the last cluster is not assigned anything 
+    #     C[i] = map(k -> dlogpdf(N(k), X[:, i]), 1:K-1) |> gumbel_max_sample
+    # end 
 end 
 
 
