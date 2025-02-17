@@ -17,17 +17,16 @@ function main()
 
 	dim = size(X, 1) 
 	
-	g₀ = 100.
+	g₀ = 10.
 	α = 10.
 	τ = 0.1
 	K = 5
 
 	# Profile.init()
 	# @profile begin 
-	C_mc, Mu_mc, Sigma_mc, llhd_mc = 
-		blocked_gibbs(
-			X; g₀=g₀, K=K, α=α, τ=τ,
-			burnin=5000, runs=5000, thinning=5)
+	C_mc, Mu_mc, Sigma_mc, llhd_mc = blocked_gibbs(
+		X; g₀=g₀, K=K, α=α, τ=τ,
+		burnin=5000, runs=5000, thinning=5)
 	# end 
 	println(C_mc[end])
 	# # println(Mu_mc[950:end])
