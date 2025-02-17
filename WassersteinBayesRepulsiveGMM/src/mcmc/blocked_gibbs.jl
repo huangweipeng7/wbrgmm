@@ -85,39 +85,20 @@ function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, config)
         @inbounds for (i_nz, nz_k_ind) in enumerate(nz_k_inds)
             C_[C .== nz_k_ind] .= i_nz  # ensure there is no index collision
         end 
-        C[i] = 0
         C .= C_
-        @assert maximum(C) <= ℓ 
-
-        try 
-            sample_repulsive_gauss!(X, Mu_, Sig_, C, ℓ, config)
-        catch e 
-            println(C, " vs ", C_)
-            println(n_map, "   ", nz_k_inds)
-            println("$ℓ  $K  ", inds[C .== 3])
-            display(Sig)
-            println()
-            display(Sig_)
-            throw("Something is wrong!!!")
-        end   
+        C[i] = -1
+        @assert maximum(C) <= ℓ "$C  $nz_k_inds" 
+ 
+        sample_repulsive_gauss!(X, Mu_, Sig_, C, ℓ, config)
         @inbounds for k_ in 1:K+1 
             @assert all(diag(Sig_[:, :, k_]) .> 0) Sig_[:, :, k_]
         end 
 
         resize!(lp, K+1) 
-        @inbounds for k in 1:K+1 
-            try 
-                n_k = sum(C .== k) - (C[i] == k) 
-                lp[k] = dlogpdf(MvNormal(Mu_[:, k], Sig_[:, :, k]), x) 
-                lp[k] += (k != K+1 ? log(n_k+α) : log(α) + logV[ℓ+1] - logV[ℓ])
-            catch e
-                println(n_map, "   ", nz_k_inds)
-                println("$k $ℓ  $K  ", inds[C .== k])
-                display(Sig)
-                println()
-                display(Sig_)
-                throw("Let's check the error!!!")
-            end              
+        @inbounds for k in 1:K+1  
+            n_k = sum(C .== k) - (C[i] == k) 
+            lp[k] = dlogpdf(MvNormal(Mu_[:, k], Sig_[:, :, k]), x) 
+            lp[k] += (k != K+1 ? log(n_k+α) : log(α) + logV[ℓ+1] - logV[ℓ]) 
         end
         Mu, Sig = Mu_, Sig_ 
         C[i] = gumbel_max_sample(lp) 
@@ -128,7 +109,7 @@ function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, config)
         ℓ = length(nz_k_inds)
 
         # Mu_mc, Sig_mc = post_sample_gauss_kernels_mc(
-        #     X, ℓ, t_max, Mu, Sig, C, config; n_mc=5)
+            # X, ℓ, t_max, Mu, Sig, C, config; n_mc=100)
         # Ẑ = numerical_Zhat(Mu_mc, Sig_mc, g₀, ℓ, t_max)
         lp_K = log_p_K(ℓ, t_max, n)
         # K_ = post_sample_K(lp_K, Ẑ, Zₖ, ℓ, t_max)  
@@ -162,14 +143,11 @@ function post_sample_gauss_kernels!(X, Mu, Sig, C, config::Dict)
     g₀ = config["g₀"] 
     a₀ = config["a₀"] 
     b₀ = config["b₀"]
-    τ = config["τ"]
-
-    aₖ::Float64 = 0 
+    τ = config["τ"] 
 
     dim, K = size(Mu)  
-    gauss = MvNormal(zeros(dim), τ^2) 
-    
-    @inbounds for k in 1:K
+    gauss = MvNormal(zeros(dim), τ^2)  
+    @inbounds for k = 1:K
         X_tmp = X[:, C.==k] 
         n = size(X_tmp, 2) 
 
