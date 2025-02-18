@@ -1,6 +1,6 @@
 function blocked_gibbs(
     X::Matrix{Float64};
-    g₀::Float64 = 100., α::Float64 = 1., 
+    g₀::Float64 = 100., β::Float64 = 1., 
     a₀::Float64 = 1., b₀::Float64 = 1., 
     l_σ2::Float64 = 0.001, u_σ2::Float64 = 10000., τ::Float64=1.,
     K::Int = 5, t_max::Int = 2,
@@ -8,9 +8,10 @@ function blocked_gibbs(
 
     dim, n = size(X)
 
-    config = Dict("g₀" => g₀, "α" => α, "a₀" => a₀, "b₀" => b₀,
-                  "t_max" => t_max, "dim" => dim, "τ" => τ,
-                "l_σ2" => l_σ2, "u_σ2" => u_σ2)
+    config = Dict(
+        "g₀" => g₀, "β" => β, "a₀" => a₀, "b₀" => b₀,
+        "t_max" => t_max, "dim" => dim, "τ" => τ,
+        "l_σ2" => l_σ2, "u_σ2" => u_σ2)
 
     C_mc = Vector()
     Mu_mc = Vector()
@@ -23,18 +24,18 @@ function blocked_gibbs(
     initialize!(X, Mu, Sig, C, config) 
 
     logV = logV_nt(n, t_max)
-    Zₖ = numerical_ZK(4K, dim, config)
+    Zₖ = numerical_Zₖ(2K, dim, config)
     
-    iter = ProgressBar(1:(burnin+runs))
-    @inbounds for run in iter
+    pbar = ProgressBar(1:(burnin+runs))
+    @inbounds for iter in pbar
         Mu, Sig, llhd = post_sample_C!(
             X, Mu, Sig, C, logV, Zₖ, config)
         post_sample_repulsive_gauss!(X, Mu, Sig, C, config)
 
         set_description(
-            iter, "loglikelihood: $(round(llhd, sigdigits=3))")
+            pbar, "loglikelihood: $(round(llhd, sigdigits=3))")
         
-        if run > burnin && run % thinning == 0 
+        if iter > burnin && iter % thinning == 0 
             push!(C_mc, deepcopy(C))
             push!(Mu_mc, deepcopy(Mu))  
             push!(Sig_mc, deepcopy(Sig))
@@ -52,84 +53,95 @@ function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, config)
     size(Mu, 2) == size(Sig, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions.")) 
 
-    dim = config["dim"]
+    # dim = config["dim"]
     t_max = config["t_max"]
-    α = config["α"] 
-    g₀ = config["g₀"]
+    β = config["β"]  
 
     n = size(X, 2)
     K = size(Mu, 2)     
 
-    inds = 1:n
+    # inds = 1:n
     lp = Vector{Float64}()
+    lc = Vector{Float64}()
     llhd = 0.       
-    C_ = zeros(Int, n)                    # Log likelihood
+    # C_ = zeros(Int, n)                    # Log likelihood
     @inbounds for i in 1:n  
-        x = X[:, i]
+        x = X[:, i] 
 
-        n_map = countmap(C[inds .!= i])  
-        nz_k_inds = keys(n_map) |> collect 
-        ℓ = length(nz_k_inds) 
- 
-        # Sample K 
-        lp_K = log_p_K(ℓ, t_max, n)
-        K = sample_K(lp_K, ℓ, t_max, n) 
+        C_, Mu_, Sig_, ℓ = process_and_sample_K(
+            i, n, C, Mu, Sig, t_max; exclude_i=true)
+        C .= C_ 
+        C[i] = -1       # pseudo component assignment
+        @assert maximum(C) <= ℓ
 
-        # Always leave a place for a new cluster. Therefore, we use K+1
-        Mu_ = zeros(Float64, dim, K+1)
-        Sig_ = zeros(Float64, dim, dim, K+1)
- 
-        Mu_[:, 1:ℓ] .= Mu[:, nz_k_inds]
-        Sig_[:, :, 1:ℓ] .= Sig[:, :, nz_k_inds]  
+        # K plus 1
+        Kp1 = size(Mu_, 2)  
 
-        @inbounds for (i_nz, nz_k_ind) in enumerate(nz_k_inds)
-            C_[C .== nz_k_ind] .= i_nz  # ensure there is no index collision
-        end 
-        C .= C_
-        C[i] = -1
-        @assert maximum(C) <= ℓ "$C  $nz_k_inds" 
- 
         sample_repulsive_gauss!(X, Mu_, Sig_, C, ℓ, config)
-        @inbounds for k_ in 1:K+1 
-            @assert all(diag(Sig_[:, :, k_]) .> 0) Sig_[:, :, k_]
-        end 
-
-        resize!(lp, K+1) 
-        @inbounds for k in 1:K+1  
-            n_k = sum(C .== k) - (C[i] == k) 
+        @inbounds for k in 1:Kp1
+            @assert all(diag(Sig_[:, :, k]) .> 0) Sig_[:, :, k]
+        end  
+        
+        # resize the vectors for loglikelihood of data and the corresponding coefficients
+        resize!(lp, Kp1) 
+        resize!(lc, Kp1) 
+        @inbounds for k in 1:Kp1 
+            n_k = sum(C .== k) - (C[i] == k)  
             lp[k] = dlogpdf(MvNormal(Mu_[:, k], Sig_[:, :, k]), x) 
-            lp[k] += (k != K+1 ? log(n_k+α) : log(α) + logV[ℓ+1] - logV[ℓ]) 
+            lc[k] = (k != Kp1 ? log(n_k+β) : log(β) + logV[ℓ+1] - logV[ℓ]) 
         end
         Mu, Sig = Mu_, Sig_ 
-        C[i] = gumbel_max_sample(lp) 
+        C[i] = gumbel_max_sample(lp .+ lc) 
         llhd += lp[C[i]]
- 
-        n_map = countmap(C)
-        nz_k_inds = keys(n_map) |> collect      
-        ℓ = length(nz_k_inds)
-
-        # Mu_mc, Sig_mc = post_sample_gauss_kernels_mc(
-            # X, ℓ, t_max, Mu, Sig, C, config; n_mc=100)
-        # Ẑ = numerical_Zhat(Mu_mc, Sig_mc, g₀, ℓ, t_max)
-        lp_K = log_p_K(ℓ, t_max, n)
-        # K_ = post_sample_K(lp_K, Ẑ, Zₖ, ℓ, t_max)  
-        K = sample_K(lp_K, ℓ, t_max, n)  
-
-        Mu_ = zeros(Float64, dim, K+1)
-        Sig_ = zeros(Float64, dim, dim, K+1)  
- 
-        @inbounds for (i_nz, nz_k_ind) in enumerate(nz_k_inds)
-            C_[C .== nz_k_ind] .= i_nz  # ensure there is no index collision
-        end 
+   
+        C_, Mu_, Sig_, _ = process_and_sample_K(
+            i, n, C, Mu, Sig, t_max; exclude_i=false)
         C .= C_
 
-        Mu_[:, 1:ℓ] .= Mu[:, nz_k_inds]
-        Sig_[:, :, 1:ℓ] .= Sig[:, :, nz_k_inds]  
- 
         Mu, Sig = Mu_, Sig_  
     end  
     return Mu, Sig, llhd
 end   
+
+
+function process_and_sample_K(
+    i, n, C, Mu, Sig, t_max; 
+    exclude_i=false, approx=true, X=nothing, Zₖ=nothing)
+    
+    dim = size(Mu, 1)
+    C_ = similar(C)
+    inds = 1:n
+
+    cluster_count = exclude_i ? countmap(C[inds .!= i]) : countmap(C)  
+    nz_k_inds = keys(cluster_count) |> collect 
+    ℓ = length(nz_k_inds) 
+
+    # Sample K  
+    lp_K = log_p_K(ℓ, t_max, n)
+    if approx 
+        K = sample_K(lp_K, ℓ, t_max, n) 
+    else
+        @assert Ẑ != nothing "In the non-approximation version, X cannot be nothing."
+        @assert Ẑ != nothing "In the non-approximation version, Zₖ cannot be nothing."
+        
+        Mu_mc, Sig_mc = post_sample_gauss_kernels_mc(
+            X, ℓ, t_max, Mu, Sig, C, config; n_mc=100)
+        Ẑ = numerical_Zhat(Mu_mc, Sig_mc, g₀, ℓ, t_max)
+        K = post_sample_K(lp_K, Ẑ, Zₖ, ℓ, t_max)  
+    end 
+
+    # Always leave a place for a new cluster. Therefore, we use K+1
+    Mu_ = zeros(Float64, dim, K+1)
+    Sig_ = zeros(Float64, dim, dim, K+1)
+
+    Mu_[:, 1:ℓ] .= Mu[:, nz_k_inds]
+    Sig_[:, :, 1:ℓ] .= Sig[:, :, nz_k_inds]  
+    
+    @inbounds for (i_nz, nz_k_ind) in enumerate(nz_k_inds)
+        C_[C .== nz_k_ind] .= i_nz
+    end   
+    return C_, Mu_, Sig_, ℓ  
+end 
 
 
 sample_K(lp_K, ℓ, t_max, n)::Int = ℓ + gumbel_max_sample(lp_K) - 1
@@ -218,12 +230,12 @@ function rand_inv_gamma(a::Float64, bb::Vector{Float64}, config; n=1)
     Λ = n == 1 ? Diagonal(zeros(Float64, dim)) : zeros(Float64, dim, dim, n) 
     @inbounds for p in 1:dim
         if n == 1
-            σ2 = truncated(Gamma(a, 1/bb[p]), 1/u_σ2, 1/l_σ2) |> rand
-            @assert σ2 > 0 
+            # Using gamma to sample inverse gamma R.V. is always more robust in Julia
+            σ2 = truncated(Gamma(a, 1/bb[p]), 1/u_σ2, 1/l_σ2) |> rand 
             Λ[p, p] = 1 / σ2
         else 
-            σ2 = rand(truncated(Gamma(a, 1/bb[p]), 1/u_σ2, 1/l_σ2), n)
-            @assert all(σ2 .> 0)
+            # Using gamma to sample inverse gamma R.V. is always more robust in Julia
+            σ2 = rand(truncated(Gamma(a, 1/bb[p]), 1/u_σ2, 1/l_σ2), n) 
             Λ[p, p, :] .= 1 ./ σ2
         end  
     end  
@@ -305,8 +317,8 @@ function min_wass_distance(Mu, Sig, g₀)
     min_d = 1.
     @inbounds for i = 1:K, j = i+1:K-1   
         d = wass_gauss(
-            Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j]) 
-        min_d = min(min_d, d/(d + g₀))
+            Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])  
+        min_d = min(min_d, d/(d+g₀))
     end  
     return min_d
 end 

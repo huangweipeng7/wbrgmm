@@ -238,6 +238,7 @@ for iter = 2:(B + nmc)
         for k1 = 1:(K - 1)
             for k2 = (k1 + 1):K
                 d = sum((gam_star(:, k1) - gam_star(:, k2)).^2);
+ 
                 g(k1, k2) = sqrt(d)/(g0 + sqrt(d));
                 g(k2, k1) = g(k1, k2);
             end

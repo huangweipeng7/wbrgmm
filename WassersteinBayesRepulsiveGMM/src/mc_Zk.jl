@@ -1,5 +1,5 @@
 # Numerical Computation of ZK as in algorithm 1
-function numerical_ZK(
+function numerical_Zₖ(
     K_max::Int, dim::Int, config::Dict; n_mc::Int = 100)
     g₀ = config["g₀"]
     a₀ = config["a₀"]
