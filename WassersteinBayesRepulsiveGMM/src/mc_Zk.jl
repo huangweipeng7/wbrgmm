@@ -9,7 +9,7 @@ function numerical_Zₖ(
     Σ_mc = zeros(dim, dim, K_max, n_mc)
 
     μ_mc[:, :, :] .= reshape(
-        reduce(hcat, rand(MvNormal(zeros(2), 1), (K_max, n_mc))),
+        reduce(hcat, rand(MvNormal(zeros(2), 1.), (K_max, n_mc))),
         dim, K_max, n_mc)
     
     @inbounds for n = 1:n_mc, k = 1:K_max

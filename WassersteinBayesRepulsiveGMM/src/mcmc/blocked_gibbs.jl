@@ -13,10 +13,10 @@ function blocked_gibbs(
         "t_max" => t_max, "dim" => dim, "τ" => τ,
         "l_σ2" => l_σ2, "u_σ2" => u_σ2)
 
-    C_mc = Vector()
-    Mu_mc = Vector()
-    Sig_mc = Vector()
-    llhd_mc = Vector()
+    C_mc = Vector{Vector}()
+    Mu_mc = Vector{Array}()
+    Sig_mc = Vector{Array}()
+    llhd_mc = Vector{Float64}()
   
     C = zeros(Int, n) 
     Mu = zeros(Float64, dim, K+1)
@@ -49,43 +49,43 @@ end
 gumbel_max_sample(lp)::Int = lp + rand(GUMBEL, size(lp)) |> argmax
 
 
-function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, config) 
+function post_sample_C!(
+    X::Matrix, Mu::Matrix, Sig::Array, 
+    C::Vector, logV::Vector, Zₖ::Vector, config::Dict) 
+
     size(Mu, 2) == size(Sig, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions.")) 
-
-    # dim = config["dim"]
+ 
     t_max = config["t_max"]
     β = config["β"]  
 
     n = size(X, 2)
     K = size(Mu, 2)     
-
-    # inds = 1:n
+ 
     lp = Vector{Float64}()
     lc = Vector{Float64}()
-    llhd = 0.       
-    # C_ = zeros(Int, n)                    # Log likelihood
-    @inbounds for i in 1:n  
-        x = X[:, i] 
+    llhd = 0.                       # Log likelihood
+    @inbounds for i = 1:n  
+        x = vec(X[:, i])
 
-        C_, Mu_, Sig_, ℓ = process_and_sample_K(
+        C_, Mu_, Sig_, ℓ = sample_K_and_swap_indices(
             i, n, C, Mu, Sig, t_max; exclude_i=true)
-        C .= C_ 
-        C[i] = -1       # pseudo component assignment
+        @inbounds C .= C_ 
+        @inbounds C[i] = -1       # pseudo component assignment
         @assert maximum(C) <= ℓ
 
         # K plus 1
         Kp1 = size(Mu_, 2)  
 
         sample_repulsive_gauss!(X, Mu_, Sig_, C, ℓ, config)
-        @inbounds for k in 1:Kp1
+        @inbounds for k = 1:Kp1
             @assert all(diag(Sig_[:, :, k]) .> 0) Sig_[:, :, k]
         end  
         
         # resize the vectors for loglikelihood of data and the corresponding coefficients
         resize!(lp, Kp1) 
         resize!(lc, Kp1) 
-        @inbounds for k in 1:Kp1 
+        @inbounds for k = 1:Kp1 
             n_k = sum(C .== k) - (C[i] == k)  
             lp[k] = dlogpdf(MvNormal(Mu_[:, k], Sig_[:, :, k]), x) 
             lc[k] = (k != Kp1 ? log(n_k+β) : log(β) + logV[ℓ+1] - logV[ℓ]) 
@@ -94,9 +94,9 @@ function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, config)
         C[i] = gumbel_max_sample(lp .+ lc) 
         llhd += lp[C[i]]
    
-        C_, Mu_, Sig_, _ = process_and_sample_K(
+        C_, Mu_, Sig_, _ = sample_K_and_swap_indices(
             i, n, C, Mu, Sig, t_max; exclude_i=false)
-        C .= C_
+        @inbounds C .= C_
 
         Mu, Sig = Mu_, Sig_  
     end  
@@ -104,30 +104,32 @@ function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, config)
 end   
 
 
-function process_and_sample_K(
+function sample_K_and_swap_indices(
     i, n, C, Mu, Sig, t_max; 
-    exclude_i=false, approx=true, X=nothing, Zₖ=nothing)
+    exclude_i=false, approx=true, X=nothing, Zₖ=nothing)::Tuple
     
     dim = size(Mu, 1)
     C_ = similar(C)
     inds = 1:n
 
     cluster_count = exclude_i ? countmap(C[inds .!= i]) : countmap(C)  
-    nz_k_inds = keys(cluster_count) |> collect 
+    nz_k_inds = cluster_count |> keys |> collect 
     ℓ = length(nz_k_inds) 
 
     # Sample K  
-    lp_K = log_p_K(ℓ, t_max, n)
+    log_p_K = log_prob_K(ℓ, t_max, n)
     if approx 
-        K = sample_K(lp_K, ℓ, t_max, n) 
+        K = sample_K(log_p_K, ℓ, t_max, n) 
     else
-        @assert Ẑ != nothing "In the non-approximation version, X cannot be nothing."
-        @assert Ẑ != nothing "In the non-approximation version, Zₖ cannot be nothing."
+        Ẑ != nothing || 
+            throw("In the non-approximation version, X cannot be nothing.")
+        X != nothing ||
+            throw("In the non-approximation version, Zₖ cannot be nothing.")
         
         Mu_mc, Sig_mc = post_sample_gauss_kernels_mc(
             X, ℓ, t_max, Mu, Sig, C, config; n_mc=100)
         Ẑ = numerical_Zhat(Mu_mc, Sig_mc, g₀, ℓ, t_max)
-        K = post_sample_K(lp_K, Ẑ, Zₖ, ℓ, t_max)  
+        K = post_sample_K(log_p_K, Ẑ, Zₖ, ℓ, t_max)  
     end 
 
     # Always leave a place for a new cluster. Therefore, we use K+1
@@ -144,11 +146,11 @@ function process_and_sample_K(
 end 
 
 
-sample_K(lp_K, ℓ, t_max, n)::Int = ℓ + gumbel_max_sample(lp_K) - 1
+sample_K(log_p_K, ℓ, t_max, n)::Int = ℓ + gumbel_max_sample(log_p_K) - 1
 
 
-post_sample_K(lp_K, Ẑ, Zₖ, ℓ, t_max)::Int = 
-    ℓ + gumbel_max_sample(lp_K .+ Ẑ .- Zₖ[ℓ:ℓ+t_max-1]) - 1
+post_sample_K(log_p_K, Ẑ, Zₖ, ℓ, t_max)::Int = 
+    ℓ + gumbel_max_sample(log_p_K .+ Ẑ .- Zₖ[ℓ:ℓ+t_max-1]) - 1
 
 
 function post_sample_gauss_kernels!(X, Mu, Sig, C, config::Dict) 
@@ -158,13 +160,13 @@ function post_sample_gauss_kernels!(X, Mu, Sig, C, config::Dict)
     τ = config["τ"] 
 
     dim, K = size(Mu)  
-    gauss = MvNormal(zeros(dim), τ^2)  
+    normal = MvNormal(zeros(dim), τ^2)  
     @inbounds for k = 1:K
         X_tmp = X[:, C.==k] 
         n = size(X_tmp, 2) 
 
         if n == 0 
-            Mu[:, k] .= rand(gauss)
+            Mu[:, k] .= rand(normal)
             Sig[:, :, k] .= rand_inv_gamma(a₀, b₀, config)
         else  
             x_sum = sum(X_tmp; dims=2)  
@@ -188,8 +190,8 @@ function post_sample_gauss_kernels_mc(X, ℓ, t_max, Mu, Sig, C, config::Dict; n
 
     dim = size(Mu, 1)  
     K = ℓ + t_max - 1
-    Mu_mc = zeros(dim, K, n_mc)
-    Sig_mc = zeros(dim, dim, K, n_mc)
+    Mu_mc = zeros(Float64, dim, K, n_mc)
+    Sig_mc = zeros(Float64, dim, dim, K, n_mc)
     
     normal = MvNormal(zeros(dim), τ^2) 
     @inbounds for k in 1:K
@@ -197,9 +199,9 @@ function post_sample_gauss_kernels_mc(X, ℓ, t_max, Mu, Sig, C, config::Dict; n
         n = size(X_tmp, 2) 
 
         if n == 0 
-            Mu_mc[:, k, :] .= rand(normal, n_mc)
-            @inbounds for mc = 1:n_mc
-                Sig_mc[:, :, k, mc] .= rand_inv_gamma(a₀, b₀, config)
+            @inbounds Mu_mc[:, k, :] .= rand(normal, n_mc)
+            for mc = 1:n_mc
+                @inbounds Sig_mc[:, :, k, mc] .= rand_inv_gamma(a₀, b₀, config)
             end
         else
             x_sum = sum(X_tmp; dims=2)  
@@ -216,13 +218,13 @@ function post_sample_gauss_kernels_mc(X, ℓ, t_max, Mu, Sig, C, config::Dict; n
 end 
 
 
-function rand_inv_gamma(a::Float64, b::Float64, config; n=1)::Diagonal
+function rand_inv_gamma(a::Float64, b::Float64, config::Dict; n=1)::Diagonal
     dim = config["dim"]
     return rand_inv_gamma(a, fill(b, dim), config; n=n)
 end 
 
  
-function rand_inv_gamma(a::Float64, bb::Vector{Float64}, config; n=1) 
+function rand_inv_gamma(a::Float64, bb::Vector{Float64}, config::Dict; n=1) 
     dim = config["dim"]
     l_σ2 = config["l_σ2"]
     u_σ2 = config["u_σ2"]
@@ -232,10 +234,12 @@ function rand_inv_gamma(a::Float64, bb::Vector{Float64}, config; n=1)
         if n == 1
             # Using gamma to sample inverse gamma R.V. is always more robust in Julia
             σ2 = truncated(Gamma(a, 1/bb[p]), 1/u_σ2, 1/l_σ2) |> rand 
+            @assert σ2 > 0
             Λ[p, p] = 1 / σ2
         else 
             # Using gamma to sample inverse gamma R.V. is always more robust in Julia
             σ2 = rand(truncated(Gamma(a, 1/bb[p]), 1/u_σ2, 1/l_σ2), n) 
+            @assert σ2 > 0
             Λ[p, p, :] .= 1 ./ σ2
         end  
     end  
@@ -243,7 +247,9 @@ function rand_inv_gamma(a::Float64, bb::Vector{Float64}, config; n=1)
 end 
 
 
-function sample_repulsive_gauss!(X, Mu, Sig, C, ℓ, config) 
+function sample_repulsive_gauss!(
+    X::Matrix, Mu::Array, Sig::Array, C::Vector, ℓ::Int, config::Dict)
+
     min_d = 0.     # min wasserstein distance 
     g₀ = config["g₀"] 
     a₀ = config["a₀"] 
@@ -263,7 +269,9 @@ function sample_repulsive_gauss!(X, Mu, Sig, C, ℓ, config)
 end 
 
 
-function post_sample_repulsive_gauss!(X, Mu, Sig, C, config)::Int
+function post_sample_repulsive_gauss!(
+    X::Matrix, Mu::Array, Sig::Array, C::Vector, config::Dict)::Int
+    
     min_d = 0.              # min wasserstein distance
     reject_counts = 0 
 
@@ -277,7 +285,9 @@ function post_sample_repulsive_gauss!(X, Mu, Sig, C, config)::Int
 end 
  
 
-function initialize!(X, Mu, Sig, C, config)  
+function initialize!(
+    X::Matrix, Mu::Array, Sig::Array, C::Vector, config::Dict) 
+    
     size(Mu, 2) == size(Sig, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions."))
     
@@ -307,18 +317,4 @@ function initialize!(X, Mu, Sig, C, config)
             k -> dlogpdf(normal_k(k), X[:, i]), 1:K-1)
     end
 end 
-
-
-function min_wass_distance(Mu, Sig, g₀)
-    size(Mu, 2) == size(Sig, 3) ||
-        throw(DimensionMismatch("Inconsistent array dimensions."))
-
-    K = size(Mu, 2)  
-    min_d = 1.
-    @inbounds for i = 1:K, j = i+1:K-1   
-        d = wass_gauss(
-            Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])  
-        min_d = min(min_d, d/(d+g₀))
-    end  
-    return min_d
-end 
+ 
