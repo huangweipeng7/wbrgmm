@@ -9,6 +9,8 @@ import tqdm
 
 from measure.wasserstein import min_wass_distance
 from logV import logV_nt
+from numerical_Zk import numerical_Zk
+from numerical_Zhat import numerical_Zhat
 
 
 key = jrandom.PRNGKey(10)
