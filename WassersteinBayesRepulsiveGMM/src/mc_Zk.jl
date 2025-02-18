@@ -4,12 +4,13 @@ function numerical_Zₖ(
     g₀ = config["g₀"]
     a₀ = config["a₀"]
     b₀ = config["b₀"]
+    τ = = config["τ"]
     
     μ_mc = zeros(dim, K_max, n_mc)
     Σ_mc = zeros(dim, dim, K_max, n_mc)
 
     μ_mc[:, :, :] .= reshape(
-        reduce(hcat, rand(MvNormal(zeros(2), 1.), (K_max, n_mc))),
+        reduce(hcat, rand(MvNormal(zeros(2), τ^2), (K_max, n_mc))),
         dim, K_max, n_mc)
     
     @inbounds for n = 1:n_mc, k = 1:K_max

@@ -1,5 +1,21 @@
-function blocked_gibbs(
-    X:: jnp.Array, 
+import jax
+import jax.numpy as jnp
+import jax.random as jrandom
+import jax.scipy.stats as jstats
+import scipy.stats as stats
+import numpy as np
+import random
+import tqdm 
+
+from measure.wasserstein import min_wass_distance
+from logV import logV_nt
+
+
+key = jrandom.PRNGKey(10)
+
+
+def blocked_gibbs(
+    X: jax.Array, 
     g0: float = 100., 
     beta: float = 1., 
     a0: float = 1., 
@@ -21,95 +37,85 @@ function blocked_gibbs(
         "l_sig2": l_sig2, "u_sig2": u_sig2
     }
 
-    C_mc = Vector{Vector}()
-    Mu_mc = Vector{Array}()
-    Sig_mc = Vector{Array}()
-    llhd_mc = Vector{Float64}()
+    C_mc = []
+    Mu_mc = []
+    Sig_mc = []
+    llhd_mc = []
   
-    C = zeros(Int, n) 
-    Mu = zeros(Float64, dim, K+1)
-    Sig = zeros(Float64, dim, dim, K+1)
-    initialize!(X, Mu, Sig, C, config) 
+    C = jnp.zeros(n) 
+    Mu = jnp.zeros((K+1, dim), dtype=jnp.float32)
+    Sig = jnp.zeros((K+1, dim, dim), dtype=jnp.float32)
+    initialize(X, Mu, Sig, C, config) 
 
     logV = logV_nt(n, t_max)
-    Zₖ = numerical_Zₖ(2K, dim, config)
+    Zk = numerical_Zk(2*K, dim, config)
     
-    pbar = ProgressBar(1:(burnin+runs))
-    @inbounds for iter in pbar
-        Mu, Sig, llhd = post_sample_C!(
+    pbar = tqdm.trange(burnin+runs)
+    for iter in pbar:
+        Mu, Sig, llhd = post_sample_C(
             X, Mu, Sig, C, logV, Zₖ, config)
-        post_sample_repulsive_gauss!(X, Mu, Sig, C, config)
+        post_sample_repulsive_gauss(X, Mu, Sig, C, config)
 
-        set_description(
-            pbar, "loglikelihood: $(round(llhd, sigdigits=3))")
+        pbar.set_description(f"loglikelihood: {llhd:.3f}")
         
-        if iter > burnin && iter % thinning == 0 
-            push!(C_mc, deepcopy(C))
-            push!(Mu_mc, deepcopy(Mu))  
-            push!(Sig_mc, deepcopy(Sig))
-            push!(llhd_mc, llhd)
-        end
-    end 
+        if iter > burnin and iter % thinning == 0: 
+            C_mc.append(deepcopy(C))
+            Mu_mc.append(deepcopy(Mu))  
+            Sig_mc.append(deepcopy(Sig))
+            llhd_mc.append(llhd)
     return C_mc, Mu_mc, Sig_mc, llhd_mc
-end 
+    
 
+def post_sample_C(X, Mu, Sig, C, logV, Zk, config):  
 
-gumbel_max_sample(lp)::Int = lp + rand(GUMBEL, size(lp)) |> argmax
-
-
-function post_sample_C(X, Mu, Sig, C, logV, Zk, config):  
- 
     t_max = config["t_max"]
     beta = config["beta"]  
 
     n = X.shape[0]
     K = Mu.shape[0]     
  
-    lp = Vector{Float64}()
-    lc = Vector{Float64}()
+    lp = jnp.array()
+    lc = jnp.array()
     llhd = 0.                       # Log likelihood
     for i in range(n):  
         x = X[i, :] 
 
-        C_, Mu_, Sig_, ell = sample_K_and_swap_indices(
-            i, n, C, Mu, Sig, t_max; exclude_i=true)
-        @inbounds C = C_ 
-        @inbounds C[i] = -1       # pseudo component assignment
-        @assert maximum(C) <= ell
+        C, Mu_, Sig_, ell = sample_K_and_swap_indices(
+            i, n, C, Mu, Sig, t_max, exclude_i=true)
+        C[i] = -1       # pseudo component assignment
+        assert jnp.max(C) < ell
 
         # K plus 1
-        Kp1 = size(Mu_, 2)  
+        Kp1 = Mu_.shape[0]
 
-        sample_repulsive_gauss!(X, Mu_, Sig_, C, ell, config)
-        @inbounds for k = 1:Kp1
-            @assert all(diag(Sig_[:, :, k]) .> 0) Sig_[:, :, k]
-        end  
+        sample_repulsive_gauss(X, Mu_, Sig_, C, ell, config)
+        for k in range(Kp1):
+            assert jnp.all(jnp.diagonal(Sig_[k, :, :]) > 0)  
         
         # resize the vectors for loglikelihood of data and the corresponding coefficients
-        resize!(lp, Kp1) 
-        resize!(lc, Kp1) 
-        @inbounds for k = 1:Kp1 
+        lp.resize(Kp1) 
+        lc.resize(Kp1) 
+        for k in range(Kp1): 
             n_k = sum(C == k) - (C[i] == k)  
-            lp[k] = dlogpdf(MvNormal(Mu_[:, k], Sig_[:, :, k]), x) 
-            lc[k] = (k != Kp1 ? log(n_k+beta) : log(beta) + logV[ell+1] - logV[ell]) 
-        end
+            lp[k] = stats.multivariate_normal.logpdf(x, Mu_[k, :], Sig_[k, :, :]) 
+            lc[k] = log(n_k+beta) if k != Kp1 else log(beta) + logV[ell+1] - logV[ell] 
+        
         Mu, Sig = Mu_, Sig_ 
-        C[i] = gumbel_max_sample(lp .+ lc) 
+        C[i] = jrandom.categorical(key, lp + lc) 
         llhd += lp[C[i]]
    
-        C_, Mu_, Sig_, _ = sample_K_and_swap_indices(
-            i, n, C, Mu, Sig, t_max; exclude_i=false)
-        C = C_
+        C, Mu_, Sig_, _ = sample_K_and_swap_indices(
+            i, n, C, Mu, Sig, t_max, exclude_i=false)
+        # C = C_
 
         Mu, Sig = Mu_, Sig_  
-    end  
     return Mu, Sig, llhd
-end   
 
 
-function sample_K_and_swap_indices(
+def sample_K_and_swap_indices(
     i, n, C, Mu, Sig, t_max, 
-    exclude_i=False, approx=True, X=None, Zk=None): 
+    exclude_i=False, approx=True, X=None, Zk=None
+): 
 
     dim = Mu.shape[1]
     C_ = jnp.zeros_like(C)
@@ -136,8 +142,8 @@ function sample_K_and_swap_indices(
         K = post_sample_K(log_p_K, Zhat, Zk, ell, t_max)   
 
     # Always leave a place for a new cluster. Therefore, we use K+1
-    Mu_ = zeros(Float64, dim, K+1)
-    Sig_ = zeros(Float64, dim, dim, K+1)
+    Mu_ = jnp.zeros(K+1, dim)
+    Sig_ = jnp.zeros(K+1, dim, dim)
 
     Mu_[1:ell, :] = Mu[nz_k_inds, :]
     Sig_[1:ell, :, :] = Sig[nz_k_inds, :, :]  
@@ -149,21 +155,20 @@ function sample_K_and_swap_indices(
 
 
 def sample_K(log_p_K, ell, t_max, n):
-    return ell + gumbel_max_sample(log_p_K) - 2
+    return ell + categorical(key, log_p_K) 
 
 
 def post_sample_K(log_p_K, Zhat, Zk, ell, t_max):  
     return ell + gumbel_max_sample(log_p_K + Zhat - Zk[ell-1:ell+t_max-2]) - 2
 
 
-function post_sample_gauss_kernels!(X, Mu, Sig, C, config::Dict) 
+def post_sample_gauss_kernels(X, Mu, Sig, C, config): 
     g0 = config["g0"] 
     a0 = config["a0"] 
     b0 = config["b0"]
     tau = config["tau"] 
 
     dim, K = size(Mu)  
-    normal = stats.multivariate_normal(jnp.zeros(dim), tau^2)  
     
     tau_sq = tau ** 2
     for k in range(K):
@@ -171,7 +176,7 @@ function post_sample_gauss_kernels!(X, Mu, Sig, C, config::Dict)
         n = X_tmp.shape[0]
         
         if n == 0: 
-            Mu[k, :] = normal.rv()
+            Mu[k, :] = jrandom.multivariate_normal(key, jnp.zeros(dim), tau^2)  
             Sig[k, :, :] = rand_inv_gamma(a0, b0, config)
         else:  
             x_sum = X_tmp.sum(axis=0)  
@@ -182,7 +187,7 @@ function post_sample_gauss_kernels!(X, Mu, Sig, C, config::Dict)
             Mu[k, :] = stats.multivariate_normal.rv(mu0, Sig[k, :, :])
 
             a_k = a0 + n / 2 
-            b_k = b0 .+ jnp.sum((X_tmp - Mu[k, :]).pow(2), axis=0) / 2  
+            b_k = b0 + jnp.sum((X_tmp - Mu[k, :]).pow(2), axis=0) / 2  
             Sig[k, :, :] = rand_inv_gamma(a_k, b_k, config)
  
 
@@ -224,33 +229,33 @@ function post_sample_gauss_kernels!(X, Mu, Sig, C, config::Dict)
 
 def rand_inv_gamma(a, b, config, n=1): 
     dim = config["dim"]
-    return rand_inv_gamma(a, fill(b, dim), config, n=n)
+    return rand_inv_gamma_vec(a, jnp.repeat(b, dim), config, n=n)
   
  
-def rand_inv_gamma(a, bb, config, n=1): 
+def rand_inv_gamma_vec(a, bb, config, n=1): 
     dim = config["dim"]
     l_sig2 = config["l_sig2"]
     u_sig2 = config["u_sig2"]
 
     if n == 1:
-        Gamma = jnp.zeros(dim)
+        Gamma = np.zeros(dim)
     else: 
-        Gamma = jnp.zeros(n, dim)
+        Gamma = np.zeros(n, dim)
 
     for p in range(dim):
-        if n == 1 
-            sig2 = stats.gamma(a, scale=1/bb[p])  
+        if n == 1:
+            sig2 = stats.gamma.rvs(a, scale=1/bb[p])  
             # assert sig2 > 0 
-            while sig2 < 1/u_sig2 || sig2 > 1/l_sig2:
-                sig2 = stats.gamma(a, scale=1/bb[p]) 
-            Λ[p] = 1 / sig2
+            while sig2 < 1/u_sig2 or sig2 > 1/l_sig2:
+                sig2 = stats.gamma.rvs(a, scale=1/bb[p]) 
+            Gamma[p] = 1 / sig2
         else:  
             for j in range(n):
-                sig2 = stats.gamma(a, scale=1/bb[p])  
+                sig2 = stats.gamma.rvs(a, scale=1/bb[p])  
                 # assert sig2 > 0
-                while sig2 < 1/u_sig2 || sig2 > 1/l_sig2:
-                    sig2 = stats.gamma(a, scale=1/bb[p])
-                Λ[j, p] = 1 ./ sig2
+                while sig2 < 1/u_sig2 or sig2 > 1/l_sig2:
+                    sig2 = stats.gamma.rvs(a, scale=1/bb[p])
+                Gamma[j, p] = 1 / sig2
 
     return Gamma 
 
@@ -264,10 +269,9 @@ def sample_repulsive_gauss(X, Mu, Sig, C, ell, config):
     dim = config["dim"]
 
     K = size(Mu, 2)
-    normal = stats.multivariate_normal(jnp.zeros(dim), tau**2)
     while rand() > min_d:   
         for k in range(ell, K): 
-            Mu[k, :] = normal.rv()
+            Mu[k, :] = jrandom.multivariate_normal(key, jnp.zeros(dim), tau**2)
             Sig[k, :, :] = rand_inv_gamma(a0, b0, config) 
         min_d = min_wass_distance(Mu, Sig, g0) 
 
@@ -284,7 +288,7 @@ def post_sample_repulsive_gauss(X, Mu, Sig, C, config):
     return reject_counts 
  
 
-def initialize(X, Mu, Sig, C, config) 
+def initialize(X, Mu, Sig, C, config):
     min_d = 0.
     n = X.shape[0]
 
@@ -293,22 +297,27 @@ def initialize(X, Mu, Sig, C, config)
     b0 = config["b0"]
     tau = config["tau"]
 
-    K, dim = Mu.shape   
-    normal = stats.multivariate_normal(jnp.zeros(dim), tau**2)
+    Mu = np.array(Mu)
+    Sig = np.array(Sig)
+
+    K, dim = Mu.shape    
     while random.random() > min_d:   
         for k in range(K):
-            Mu[:, k] = normal.rv()
-            Sig[:, :, k] = rand_inv_gamma(a0, b0, config)
+            Mu[k] = stats.multivariate_normal.rvs(
+                jnp.zeros(dim), jnp.eye(dim)*tau**2
+            )
+            np.fill_diagonal(Sig[k], rand_inv_gamma(a0, b0, config))
+
         min_d = min_wass_distance(Mu, Sig, g0) 
 
     def normal_k(k, x):
-        return multivariate_normal.logpdf(x, Mu[:, k], Sig[:, :, k])
+        return jstats.multivariate_normal.logpdf(x, Mu[k], Sig[k])
 
     for i in range(n):
         # Make sure that the last cluster is not assigned anything
-        C[i] = jnp.argmax(
-            list(map(lambda k: normal_k(k, X[i, :]), range(K-1)))
+        C.at[i].set(
+            jnp.argmax(
+                jnp.array([normal_k(k, X[i]) for k in range(K-1)])
+            ).item()
         )
-    end
-end 
  

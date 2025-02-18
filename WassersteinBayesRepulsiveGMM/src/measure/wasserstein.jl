@@ -22,7 +22,7 @@ function min_wass_distance(Mu, Sig, g₀)
 
     K = size(Mu, 2)  
     min_d = 1.
-    @inbounds for i = 1:K, j = i+1:K-1   
+    @inbounds for i = 1:K-1, j = i+1:K  
         d = wass_gauss(
             Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])  
         min_d = min(min_d, d/(d+g₀))

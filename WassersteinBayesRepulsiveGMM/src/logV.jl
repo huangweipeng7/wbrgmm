@@ -11,8 +11,10 @@ function logV_nt(n, t_max)::Vector{Float64}
                 # Note: The first condition is false when a = c = -Inf
                 if k >= t
                     a = c 
-                    b = loggamma(k + 1) - loggamma(k - t + 1) - loggamma(k + n)  
-                    b += loggamma(k) - log_exp_m_1 - logfactorial(k) 
+                    # b = loggamma(k + 1) - loggamma(k - t + 1) - loggamma(k + n)  
+                    # b += loggamma(k) - log_exp_m_1 - logfactorial(k) 
+                    b =  - loggamma(k - t + 1) - loggamma(k + n)  
+                    b += loggamma(k) - log_exp_m_1  
                     m = max(a, b);
                     c = m == -Inf ? -Inf : m + log(exp(a - m) + exp(b - m))
                 end
