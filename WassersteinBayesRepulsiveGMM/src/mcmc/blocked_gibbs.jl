@@ -306,11 +306,13 @@ function initialize!(
     size(Mu, 2) == size(Sig, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions."))
     
-    sample_repulsive_gauss!(X, Mu:, Sig, 0, config)
+    dim, K = size(Mu)
+
+    sample_repulsive_gauss!(X, Mu, Sig, 0, config)
     # C[:] .= sample(1:K-1, n, replace=true) 
 
     normal_k(k) = MvNormal(Mu[:, k], Sig[:, :, k])
-    @inbounds for i = 1:n
+    @inbounds for i in eachindex(C)
         # Make sure that the last cluster is not assigned anything
         C[i] = (argmax ∘ map)(
             k -> dlogpdf(normal_k(k), X[:, i]), 1:K-1)
