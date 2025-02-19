@@ -266,7 +266,6 @@ end
 function sample_repulsive_gauss!(
     X::Matrix, Mu::Array, Sig::Array, ℓ::Int, config::Dict)
 
-    min_d = 0.     # min wasserstein distance 
     g₀ = config["g₀"] 
     a₀ = config["a₀"] 
     b₀ = config["b₀"]
@@ -274,6 +273,8 @@ function sample_repulsive_gauss!(
 
     dim, K = size(Mu)
     normal = MvNormal(zeros(dim), τ^2)
+
+    min_d = 0.     # min wasserstein distance 
     while rand() > min_d   
         @inbounds for k in ℓ+1:K 
             Mu[:, k] .= rand(normal)
