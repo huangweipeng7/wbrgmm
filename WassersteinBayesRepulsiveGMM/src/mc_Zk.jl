@@ -4,7 +4,7 @@ function numerical_Zₖ(
     g₀ = config["g₀"]
     a₀ = config["a₀"]
     b₀ = config["b₀"]
-    τ = = config["τ"]
+    τ = config["τ"]
     
     μ_mc = zeros(dim, K_max, n_mc)
     Σ_mc = zeros(dim, dim, K_max, n_mc)

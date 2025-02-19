@@ -1,7 +1,10 @@
+import jax
+import numpy as np
 import pandas as pd 
 
-
 from mcmc.blocked_collapse_gibbs import blocked_gibbs
+ 
+np.random.seed(100)
 
 
 def main():

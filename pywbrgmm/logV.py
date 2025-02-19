@@ -1,6 +1,5 @@
 import jax.numpy as jnp 
 import math 
-
 from jax.lax import lgamma 
 
 

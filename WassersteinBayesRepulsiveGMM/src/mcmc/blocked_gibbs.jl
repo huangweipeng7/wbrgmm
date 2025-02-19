@@ -16,6 +16,7 @@ function blocked_gibbs(
     C_mc = Vector{Vector}()
     Mu_mc = Vector{Array}()
     Sig_mc = Vector{Array}()
+    K_mc = Vector{Int}()
     llhd_mc = Vector{Float64}()
   
     C = zeros(Int, n) 
@@ -28,8 +29,12 @@ function blocked_gibbs(
     
     pbar = ProgressBar(1:(burnin+runs))
     @inbounds for iter in pbar
-        Mu, Sig, llhd = post_sample_C!(
+        C, Mu, Sig, llhd = post_sample_C!(
             X, Mu, Sig, C, logV, Zₖ, config)
+        
+        C, Mu, Sig, _ = post_sample_K_and_swap_indices(
+            X, C, Mu, Sig, Zₖ, t_max; approx=true) 
+        
         post_sample_repulsive_gauss!(X, Mu, Sig, C, config)
 
         set_description(
@@ -39,10 +44,11 @@ function blocked_gibbs(
             push!(C_mc, deepcopy(C))
             push!(Mu_mc, deepcopy(Mu))  
             push!(Sig_mc, deepcopy(Sig))
+            push!(K_mc, size(Mu, 2)-1)
             push!(llhd_mc, llhd)
         end
     end 
-    return C_mc, Mu_mc, Sig_mc, llhd_mc
+    return C_mc, Mu_mc, Sig_mc, K_mc, llhd_mc
 end 
 
 
@@ -64,8 +70,8 @@ function post_sample_C!(
  
     lp = Vector{Float64}()
     lc = Vector{Float64}()
-    llhd = 0.                       # Log likelihood
-    @inbounds for i = 1:n  
+    llhd = 0.  
+    for i = 1:n  
         x = vec(X[:, i])
 
         C_, Mu_, Sig_, ℓ = sample_K_and_swap_indices(
@@ -77,7 +83,7 @@ function post_sample_C!(
         # K plus 1
         Kp1 = size(Mu_, 2)  
 
-        sample_repulsive_gauss!(X, Mu_, Sig_, C, ℓ, config)
+        sample_repulsive_gauss!(X, Mu_, Sig_, ℓ, config)
         @inbounds for k = 1:Kp1
             @assert all(diag(Sig_[:, :, k]) .> 0) Sig_[:, :, k]
         end  
@@ -86,27 +92,22 @@ function post_sample_C!(
         resize!(lp, Kp1) 
         resize!(lc, Kp1) 
         @inbounds for k = 1:Kp1 
-            n_k = sum(C .== k) - (C[i] == k)  
+            n_k = sum(C .== k) 
             lp[k] = dlogpdf(MvNormal(Mu_[:, k], Sig_[:, :, k]), x) 
-            lc[k] = (k != Kp1 ? log(n_k+β) : log(β) + logV[ℓ+1] - logV[ℓ]) 
+            lc[k] = k != Kp1 ? log(n_k+β) : log(β) + logV[ℓ+1] - logV[ℓ]  
         end
         Mu, Sig = Mu_, Sig_ 
         C[i] = gumbel_max_sample(lp .+ lc) 
-        llhd += lp[C[i]]
-   
-        C_, Mu_, Sig_, _ = sample_K_and_swap_indices(
-            i, n, C, Mu, Sig, t_max; exclude_i=false)
-        @inbounds C .= C_
-
-        Mu, Sig = Mu_, Sig_  
+        llhd += lp[C[i]] 
     end  
-    return Mu, Sig, llhd
+    return C, Mu, Sig, llhd
 end   
 
 
 function sample_K_and_swap_indices(
     i, n, C, Mu, Sig, t_max; 
-    exclude_i=false, approx=true, X=nothing, Zₖ=nothing)::Tuple
+    exclude_i=false, approx=true, X=nothing, 
+    Zₖ=nothing, config=nothing, n_mc=2000)::Tuple
     
     dim = size(Mu, 1)
     C_ = similar(C)
@@ -121,14 +122,17 @@ function sample_K_and_swap_indices(
     if approx 
         K = sample_K(log_p_K, ℓ, t_max, n) 
     else
-        Ẑ != nothing || 
+        Zₖ != nothing || 
             throw("In the non-approximation version, X cannot be nothing.")
         X != nothing ||
             throw("In the non-approximation version, Zₖ cannot be nothing.")
+        config != nothing ||
+            throw("In the non-approximation version, config cannot be nothing.")
         
         Mu_mc, Sig_mc = post_sample_gauss_kernels_mc(
-            X, ℓ, t_max, Mu, Sig, C, config; n_mc=100)
-        Ẑ = numerical_Zhat(Mu_mc, Sig_mc, g₀, ℓ, t_max)
+            X, ℓ, t_max, Mu, Sig, C, config; n_mc=n_mc)
+
+        Ẑ = numerical_Zhat(Mu_mc, Sig_mc, config["g₀"], ℓ, t_max)
         K = post_sample_K(log_p_K, Ẑ, Zₖ, ℓ, t_max)  
     end 
 
@@ -146,14 +150,28 @@ function sample_K_and_swap_indices(
 end 
 
 
-sample_K(log_p_K, ℓ, t_max, n)::Int = ℓ + gumbel_max_sample(log_p_K) - 1
+function post_sample_K_and_swap_indices(
+    X, C, Mu, Sig, Zₖ, t_max; 
+    approx=true, config=nothing, n_mc=nothing) 
+
+    n = size(X, 2)
+    return sample_K_and_swap_indices(
+        nothing, n, C, Mu, Sig, t_max; 
+        exclude_i=true, approx=approx, X=X, Zₖ=Zₖ, 
+        config=config, n_mc=n_mc)
+end 
 
 
-post_sample_K(log_p_K, Ẑ, Zₖ, ℓ, t_max)::Int = 
+sample_K(log_p_K, ℓ, t_max, n) = ℓ + gumbel_max_sample(log_p_K) - 1
+
+
+post_sample_K(log_p_K, Ẑ, Zₖ, ℓ, t_max) = 
     ℓ + gumbel_max_sample(log_p_K .+ Ẑ .- Zₖ[ℓ:ℓ+t_max-1]) - 1
 
 
-function post_sample_gauss_kernels!(X, Mu, Sig, C, config::Dict) 
+function post_sample_gauss_kernels!(
+    X::Matrix, Mu::Matrix, Sig::Array, C::Vector, config::Dict) 
+    
     g₀ = config["g₀"] 
     a₀ = config["a₀"] 
     b₀ = config["b₀"]
@@ -239,7 +257,7 @@ function rand_inv_gamma(a::Float64, bb::Vector{Float64}, config::Dict; n=1)
         else 
             # Using gamma to sample inverse gamma R.V. is always more robust in Julia
             σ2 = rand(truncated(Gamma(a, 1/bb[p]), 1/u_σ2, 1/l_σ2), n) 
-            @assert σ2 > 0
+            @assert all(σ2 .> 0)
             Λ[p, p, :] .= 1 ./ σ2
         end  
     end  
@@ -248,7 +266,7 @@ end
 
 
 function sample_repulsive_gauss!(
-    X::Matrix, Mu::Array, Sig::Array, C::Vector, ℓ::Int, config::Dict)
+    X::Matrix, Mu::Array, Sig::Array, ℓ::Int, config::Dict)
 
     min_d = 0.     # min wasserstein distance 
     g₀ = config["g₀"] 
@@ -277,8 +295,8 @@ function post_sample_repulsive_gauss!(
 
     g₀ = config["g₀"]
     while rand() > min_d 
-        post_sample_gauss_kernels!(X, Mu, Sig, C, config)
         reject_counts += 1 
+        post_sample_gauss_kernels!(X, Mu, Sig, C, config)
         min_d = min_wass_distance(Mu, Sig, g₀)
     end
     return reject_counts 
