@@ -1,8 +1,7 @@
 function blocked_gibbs(
     X::Matrix{Float64};
-    g₀::Float64 = 100., β::Float64 = 1., 
-    a₀::Float64 = 1., b₀::Float64 = 1., 
-    l_σ2::Float64 = 0.001, u_σ2::Float64 = 10000., τ::Float64=1.,
+    g₀ = 100., β = 1., a₀ = 1., b₀ = 1., 
+    l_σ2 = 0.001, u_σ2 = 10000., τ = 1.,
     K::Int = 5, t_max::Int = 2,
     burnin::Int = 2000, runs::Int = 3000, thinning::Int = 1)
 
@@ -325,6 +324,7 @@ function initialize!(
             Sig[:, :, k] .= rand_inv_gamma(a₀, b₀, config)
         end
         min_d = min_wass_distance(Mu, Sig, g₀) 
+        println(min_d)
     end 
     # C[:] .= sample(1:K-1, n, replace=true) 
 

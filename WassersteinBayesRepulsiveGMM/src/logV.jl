@@ -13,7 +13,7 @@ function logV_nt(n, t_max)::Vector{Float64}
                     a = c 
                     # b = loggamma(k + 1) - loggamma(k - t + 1) - loggamma(k + n)  
                     # b += loggamma(k) - log_exp_m_1 - logfactorial(k) 
-                    b =  - loggamma(k - t + 1) - loggamma(k + n)  
+                    b = - loggamma(k - t + 1) - loggamma(k + n)  
                     b += loggamma(k) - log_exp_m_1  
                     m = max(a, b)
                     c = m == -Inf ? -Inf : m + log(exp(a - m) + exp(b - m))

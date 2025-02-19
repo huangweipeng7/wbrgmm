@@ -1,7 +1,7 @@
 using CSV
 using DataFrames
 using LinearAlgebra 
-using Plots, StatsPlots, ColorSchemes
+using Plots, StatsPlots
 using Random 
 using StatsBase
 using WassersteinBayesRepulsiveGMM  

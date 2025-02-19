@@ -6,17 +6,7 @@
 end
 
 
-@fastmath function wass_gauss2(μ₁, Σ₁, μ₂, Σ₂)::Float64
-    """ Wassertein distance between Normal(μ₁, Σ₁) and Normal(μ₂, Σ₂)
-    """  
-    Σ₁_sqrt = sqrt(Σ₁) 
-    d = sum((μ₁ .- μ₂) .^ 2) 
-    d += tr(Σ₁) + tr(Σ₂) - 2 * tr(sqrt(Σ₁_sqrt * Σ₂ * Σ₁_sqrt))   
-    return sqrt(d) 
-end
-
-
-function min_wass_distance(Mu, Sig, g₀)
+@fastmath function min_wass_distance(Mu, Sig, g₀)
     size(Mu, 2) == size(Sig, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions."))
 
