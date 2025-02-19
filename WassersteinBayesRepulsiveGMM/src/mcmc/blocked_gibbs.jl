@@ -112,8 +112,7 @@ function sample_K_and_swap_indices(
     C_ = similar(C)
     inds = 1:n
 
-    cluster_count = exclude_i ? countmap(C[inds .!= i]) : countmap(C)  
-    nz_k_inds = cluster_count |> keys |> collect 
+    nz_k_inds = exclude_i ? unique(C[inds .!= i]) : unique(C)  
     ℓ = length(nz_k_inds) 
 
     # Sample K  
@@ -271,10 +270,9 @@ function sample_repulsive_gauss!(
     g₀ = config["g₀"] 
     a₀ = config["a₀"] 
     b₀ = config["b₀"]
-    τ = config["τ"]
-    dim = config["dim"]
+    τ = config["τ"] 
 
-    K = size(Mu, 2)
+    dim, K = size(Mu)
     normal = MvNormal(zeros(dim), τ^2)
     while rand() > min_d   
         @inbounds for k in ℓ+1:K 
@@ -308,24 +306,7 @@ function initialize!(
     size(Mu, 2) == size(Sig, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions."))
     
-    min_d = 0.
-    n = size(X, 2)
-
-    g₀ = config["g₀"] 
-    a₀ = config["a₀"] 
-    b₀ = config["b₀"]
-    τ = config["τ"]
-
-    dim, K = size(Mu)  
-    normal = MvNormal(zeros(dim), τ^2*I) 
-    while rand() > min_d   
-        @inbounds for k = 1:K
-            Mu[:, k] .= rand(normal)
-            Sig[:, :, k] .= rand_inv_gamma(a₀, b₀, config)
-        end
-        min_d = min_wass_distance(Mu, Sig, g₀) 
-        println(min_d)
-    end 
+    sample_repulsive_gauss!(X, Mu:, Sig, 0, config)
     # C[:] .= sample(1:K-1, n, replace=true) 
 
     normal_k(k) = MvNormal(Mu[:, k], Sig[:, :, k])

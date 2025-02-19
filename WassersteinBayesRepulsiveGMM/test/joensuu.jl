@@ -30,7 +30,7 @@ function main()
 	C_mc, Mu_mc, Sigma_mc, K_mc, llhd_mc = blocked_gibbs(
 		X; g₀=g₀, K=K, β=β, τ=τ, a₀=a₀, b₀=b₀, 
 		l_σ2=l_σ2, u_σ2=u_σ2,
-		burnin=1000, runs=1500, thinning=10) 
+		burnin=2000, runs=5000, thinning=10) 
 
 	println(C_mc[end])
 	println(countmap(C_mc[end]))

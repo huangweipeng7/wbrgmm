@@ -1,7 +1,9 @@
+import jax 
 import jax.numpy as jnp 
 from jax.lax import lgamma 
 
 
+@jax.jit
 def log_prob_wrapper(k, ell, n): 
 	return lgamma(k+1.) - lgamma(k-ell+1.) - lgamma(k+n+1.)
 

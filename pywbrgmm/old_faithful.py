@@ -12,7 +12,7 @@ def main():
 	df = pd.read_csv('faithful_data.csv')
 	X = df.values[:, 1:3]
 	
-	g0 = 10.
+	g0 = 1.
 	beta = 1.
 	tau = 0.1
 	a0 = 1.
