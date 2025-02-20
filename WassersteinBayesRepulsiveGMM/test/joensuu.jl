@@ -1,6 +1,7 @@
 using CSV
 using DataFrames
 using LinearAlgebra 
+using MAT
 using Plots, StatsPlots
 using Random 
 using StatsBase
@@ -14,7 +15,7 @@ Random.seed!(200)
 
 
 function main()
-	data = CSV.File("Joensuu.csv", delim=' ') |> DataFrame 
+	data = CSV.File("./data/joensuu.csv", delim=' ') |> DataFrame 
 	X = Matrix(data[:, 1:2]) |> transpose |> Matrix	 
 
 	dim = size(X, 1) 	
@@ -27,19 +28,26 @@ function main()
 	u_σ2 = 100.
 	K = 10
  
-	C_mc, Mu_mc, Sigma_mc, K_mc, llhd_mc = blocked_gibbs(
+	C_mc, Mu_mc, Sig_mc, K_mc, llhd_mc = blocked_gibbs(
 		X; g₀=g₀, K=K, β=β, τ=τ, a₀=a₀, b₀=b₀, 
 		l_σ2=l_σ2, u_σ2=u_σ2,
-		burnin=2000, runs=5000, thinning=10) 
+		burnin=2500, runs=5000, thinning=10) 
 
 	println(C_mc[end])
 	println(countmap(C_mc[end]))
 	# # println(Mu_mc[950:end])
 	# # println(Sigma_mc[950:end])
-
-	p = density(K_mc)
-	savefig(p, "test_K.pdf")  
-
+ 
+	mkpath("results/")
+ 	matwrite("results/joensuu.mat", 
+ 		Dict(
+			"K_mc" => K_mc,
+			"C_mc" => C_mc,
+			"Mu_mc" => Mu_mc,
+			"Sig_mc" => Sig_mc
+		)
+	) 
+  
 	plots = []
 	for i in 0:3
 		p = scatter(
