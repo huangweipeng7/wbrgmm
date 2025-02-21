@@ -1,7 +1,6 @@
 using CSV
 using DataFrames
-using LinearAlgebra 
-using MAT
+using LinearAlgebra  
 using Plots, StatsPlots
 using Random 
 using StatsBase
@@ -38,15 +37,11 @@ function main()
 	# # println(Mu_mc[950:end])
 	# # println(Sigma_mc[950:end])
  
-	mkpath("results/")
- 	matwrite("results/joensuu.mat", 
- 		Dict(
-			"K_mc" => K_mc,
-			"C_mc" => C_mc,
-			"Mu_mc" => Mu_mc,
-			"Sig_mc" => Sig_mc
-		)
-	) 
+	mkpath("results/old_faithful/")
+	C_df = DataFrame(C_mc, :auto)
+	CSV.write("results/old_faithful/C_mc.csv", C_df)
+	K_df = DataFrame(K_mc', :auto)
+	CSV.write("results/old_faithful/K_mc.csv", K_df)
   
 	plots = []
 	for i in 0:3

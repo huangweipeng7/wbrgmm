@@ -1,6 +1,6 @@
 function logV_nt(n, t_max)::Vector{Float64} 
     log_V = zeros(t_max)
-    tol = 1e-12 
+    tol = 1e-9 
 
     log_exp_m_1 = log(exp(1) - 1)
     @inbounds for t = 1:t_max
