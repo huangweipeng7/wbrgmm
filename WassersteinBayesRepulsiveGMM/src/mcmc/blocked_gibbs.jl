@@ -1,5 +1,5 @@
 function blocked_gibbs(
-    X::Matrix{Float64};
+    X::Matrix;
     g₀ = 100., β = 1., a₀ = 1., b₀ = 1., 
     l_σ2 = 0.001, u_σ2 = 10000., τ = 1.,
     K::Int = 5, t_max::Int = 2,
@@ -16,11 +16,11 @@ function blocked_gibbs(
     Mu_mc = Vector{Array}()
     Sig_mc = Vector{Array}()
     K_mc = Vector{Int}()
-    llhd_mc = Vector{Float64}()
+    llhd_mc = Vector{Real}()
   
     C = zeros(Int, n) 
-    Mu = zeros(Float64, dim, K+1)
-    Sig = zeros(Float64, dim, dim, K+1)
+    Mu = zeros(dim, K+1)
+    Sig = zeros(dim, dim, K+1)
     initialize!(X, Mu, Sig, C, config) 
 
     logV = logV_nt(n, t_max)
@@ -51,12 +51,11 @@ function blocked_gibbs(
 end 
 
 
-gumbel_max_sample(lp)::Int = lp + rand(GUMBEL, size(lp)) |> argmax
+gumbel_max_sample(lp) = lp + rand(GUMBEL, size(lp)) |> argmax
 
 
-function post_sample_C!(
-    X::Matrix, Mu::Matrix, Sig::Array, 
-    C::Vector, logV::Vector, Zₖ::Vector, config::Dict) 
+function post_sample_C!(X::Matrix, Mu::Matrix, Sig::Array, C::Vector{Int}, 
+                        logV::Vector, Zₖ::Vector, config::Dict) 
 
     size(Mu, 2) == size(Sig, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions.")) 
@@ -67,8 +66,8 @@ function post_sample_C!(
     n = size(X, 2)
     K = size(Mu, 2)     
  
-    lp = Vector{Float64}()
-    lc = Vector{Float64}()
+    lp = Vector()
+    lc = Vector()
     llhd = 0.  
     for i = 1:n  
         x = vec(X[:, i])
@@ -135,8 +134,8 @@ function sample_K_and_swap_indices(
     end 
 
     # Always leave a place for a new cluster. Therefore, we use K+1
-    Mu_ = zeros(Float64, dim, K+1)
-    Sig_ = zeros(Float64, dim, dim, K+1)
+    Mu_ = zeros(dim, K+1)
+    Sig_ = zeros(dim, dim, K+1)
 
     Mu_[:, 1:ℓ] .= Mu[:, nz_k_inds]
     Sig_[:, :, 1:ℓ] .= Sig[:, :, nz_k_inds]  
@@ -167,9 +166,7 @@ post_sample_K(log_p_K, Ẑ, Zₖ, ℓ, t_max) =
     ℓ + gumbel_max_sample(log_p_K .+ Ẑ .- Zₖ[ℓ:ℓ+t_max-1]) - 1
 
 
-function post_sample_gauss_kernels!(
-    X::Matrix, Mu::Matrix, Sig::Array, C::Vector, config::Dict) 
-    
+function post_sample_gauss_kernels!(X, Mu, Sig, C, config) 
     g₀ = config["g₀"] 
     a₀ = config["a₀"] 
     b₀ = config["b₀"]
@@ -187,8 +184,8 @@ function post_sample_gauss_kernels!(
         else  
             x_sum = sum(X_tmp; dims=2)  
             Σ₀ = inv(τ^2 * I + n * inv(Sig[:, :, k]))
-            μ₀ = Σ₀ * (inv(Sig[:, :, k]) * x_sum) |> vec 
-            Mu[:, k] .= MvNormal(μ₀, Σ₀) |> rand
+            μ₀ = Σ₀ * (inv(Sig[:, :, k]) * x_sum) 
+            Mu[:, k] .= MvNormal(μ₀|> vec, Σ₀) |> rand
 
             aₖ = a₀ + n / 2 
             bₖ = b₀ .+ sum((X_tmp .- Mu[:, k]).^2; dims=2) / 2 |> vec
@@ -198,7 +195,9 @@ function post_sample_gauss_kernels!(
 end 
  
 
-function post_sample_gauss_kernels_mc(X, ℓ, t_max, Mu, Sig, C, config::Dict; n_mc=20) 
+function post_sample_gauss_kernels_mc(
+    X, ℓ, t_max, Mu, Sig, C, config::Dict; n_mc=20) 
+    
     g₀ = config["g₀"] 
     a₀ = config["a₀"] 
     b₀ = config["b₀"]
@@ -206,8 +205,8 @@ function post_sample_gauss_kernels_mc(X, ℓ, t_max, Mu, Sig, C, config::Dict; n
 
     dim = size(Mu, 1)  
     K = ℓ + t_max - 1
-    Mu_mc = zeros(Float64, dim, K, n_mc)
-    Sig_mc = zeros(Float64, dim, dim, K, n_mc)
+    Mu_mc = zeros(dim, K, n_mc)
+    Sig_mc = zeros(dim, dim, K, n_mc)
     
     normal = MvNormal(zeros(dim), τ^2) 
     @inbounds for k in 1:K
@@ -215,10 +214,8 @@ function post_sample_gauss_kernels_mc(X, ℓ, t_max, Mu, Sig, C, config::Dict; n
         n = size(X_tmp, 2) 
 
         if n == 0 
-            @inbounds Mu_mc[:, k, :] .= rand(normal, n_mc)
-            for mc = 1:n_mc
-                @inbounds Sig_mc[:, :, k, mc] .= rand_inv_gamma(a₀, b₀, config)
-            end
+            Mu_mc[:, k, :] .= rand(normal, n_mc)
+            Sig_mc[:, :, k, :] .= rand_inv_gamma_mc(a₀, b₀, n_mc, config)
         else
             x_sum = sum(X_tmp; dims=2)  
             Σ₀ = inv(τ^2*I + n * inv(Sig[:, :, k]))
@@ -227,67 +224,14 @@ function post_sample_gauss_kernels_mc(X, ℓ, t_max, Mu, Sig, C, config::Dict; n
 
             aₖ = a₀ + n / 2 
             bₖ = b₀ .+ sum((X_tmp .- Mu[:, k]).^2; dims=2) / 2 |> vec
-            Sig_mc[:, :, k, :] .= rand_inv_gamma(aₖ, bₖ, config; n=n_mc) 
+            Sig_mc[:, :, k, :] .= rand_inv_gamma_mc(aₖ, bₖ, n_mc, config) 
         end  
     end 
     return Mu_mc, Sig_mc
 end 
 
 
-function rand_inv_gamma(a::Float64, b::Float64, config::Dict; n=1)::Diagonal
-    dim = config["dim"]
-    return rand_inv_gamma(a, fill(b, dim), config; n=n)
-end 
-
- 
-function rand_inv_gamma(a::Float64, bb::Vector{Float64}, config::Dict; n=1) 
-    dim = config["dim"]
-    l_σ2 = config["l_σ2"]
-    u_σ2 = config["u_σ2"]
-
-    Λ = n == 1 ? Diagonal(zeros(Float64, dim)) : zeros(Float64, dim, dim, n) 
-    @inbounds for p in 1:dim
-        if n == 1
-            # Using gamma to sample inverse gamma R.V. is always more robust in Julia
-            σ2 = truncated(Gamma(a, 1/bb[p]), 1/u_σ2, 1/l_σ2) |> rand 
-            @assert σ2 > 0
-            Λ[p, p] = 1 / σ2
-        else 
-            # Using gamma to sample inverse gamma R.V. is always more robust in Julia
-            σ2 = rand(truncated(Gamma(a, 1/bb[p]), 1/u_σ2, 1/l_σ2), n) 
-            @assert all(σ2 .> 0)
-            Λ[p, p, :] .= 1 ./ σ2
-        end  
-    end  
-    return Λ
-end 
-
-
-function sample_repulsive_gauss!(
-    X::Matrix, Mu::Array, Sig::Array, ℓ::Int, config::Dict)
-
-    g₀ = config["g₀"] 
-    a₀ = config["a₀"] 
-    b₀ = config["b₀"]
-    τ = config["τ"] 
-
-    dim, K = size(Mu)
-    normal = MvNormal(zeros(dim), τ^2)
-
-    min_d = 0.     # min wasserstein distance 
-    while rand() > min_d   
-        @inbounds for k in ℓ+1:K 
-            Mu[:, k] .= rand(normal)
-            Sig[:, :, k] .= rand_inv_gamma(a₀, b₀, config)
-        end 
-        min_d = min_wass_distance(Mu, Sig, g₀)
-    end 
-end 
-
-
-function post_sample_repulsive_gauss!(
-    X::Matrix, Mu::Array, Sig::Array, C::Vector, config::Dict)::Int
-    
+function post_sample_repulsive_gauss!(X, Mu, Sig, C, config::Dict)
     min_d = 0.              # min wasserstein distance
     reject_counts = 0 
 

@@ -21,6 +21,8 @@ include("numerical_Zhat.jl")
 
 include("measure/wasserstein.jl")
 include("mcmc/blocked_gibbs.jl")
+include("mcmc/prior_sampler.jl")
+
 
 dlogpdf = Distributions.logpdf
 
