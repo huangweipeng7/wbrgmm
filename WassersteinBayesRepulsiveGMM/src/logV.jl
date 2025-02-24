@@ -1,4 +1,4 @@
-function logV_nt(n, t_max)::Vector{Float64} 
+function logV_nt(n, t_max) 
     log_V = zeros(t_max)
     tol = 1e-9 
 

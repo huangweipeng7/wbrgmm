@@ -1,13 +1,10 @@
 module WassersteinBayesRepulsiveGMM
 
-export blocked_gibbs, NormalInverseWishart
-
-import Base.rand
-
-using Profile
+export blocked_gibbs
+ 
 using Distributions 
-using LinearAlgebra
-using PDMats
+using FStrings
+using LinearAlgebra 
 using ProgressBars
 using Random 
 using SpecialFunctions
@@ -16,7 +13,7 @@ using StatsBase
 
 include("log_p_K.jl")
 include("logV.jl")
-include("mc_Zk.jl")
+include("numerical_Zk.jl")
 include("numerical_Zhat.jl")
 
 include("measure/wasserstein.jl")

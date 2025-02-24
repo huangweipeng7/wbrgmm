@@ -1,10 +1,11 @@
-function rand_inv_gamma(a, b, config::Dict)::Diagonal 
-    dim = config["dim"]
-    return rand_inv_gamma(a, fill(b, dim), config)
-end 
+categorical_from_log(logits) = logits + rand(GUMBEL, size(logits)) |> argmax
+
+
+rand_inv_gamma(a, b::Real, config)::Diagonal = 
+    rand_inv_gamma(a, fill(b, config["dim"]), config)
 
  
-function rand_inv_gamma(a, bb::Vector, config::Dict)::Diagonal 
+function rand_inv_gamma(a, b::Vector, config)::Diagonal 
     dim = config["dim"]
     l_σ2 = config["l_σ2"]
     u_σ2 = config["u_σ2"]
@@ -12,7 +13,7 @@ function rand_inv_gamma(a, bb::Vector, config::Dict)::Diagonal
     Λ = Diagonal(zeros(dim))  
     @inbounds for p in 1:dim 
         # Using gamma to sample inverse gamma R.V. is always more robust in Julia
-        σ2 = truncated(Gamma(a, 1/bb[p]), 1/u_σ2, 1/l_σ2) |> rand 
+        σ2 = truncated(Gamma(a, 1/b[p]), 1/u_σ2, 1/l_σ2) |> rand 
         @assert σ2 > 0
         Λ[p, p] = 1 / σ2
     end  
@@ -20,21 +21,19 @@ function rand_inv_gamma(a, bb::Vector, config::Dict)::Diagonal
 end 
 
 
-function rand_inv_gamma_mc(a, b, n_mc, config::Dict)::Diagonal 
-    dim = config["dim"]
-    return rand_inv_gamma_mc(a, fill(b, dim), n_mc, config)
-end 
+rand_inv_gamma_mc(a, b::Real, n_mc, config)::Array = 
+    rand_inv_gamma_mc(a, fill(b, config["dim"]), n_mc, config)
 
  
-function rand_inv_gamma_mc(a, bb::Vector, n_mc, config::Dict) 
+function rand_inv_gamma_mc(a, b::Vector, n_mc, config) 
     dim = config["dim"]
     l_σ2 = config["l_σ2"]
     u_σ2 = config["u_σ2"]
 
-    Λ = zeros(dim, dim, n_mc, ) 
+    Λ = zeros(dim, dim, n_mc) 
     @inbounds for p in 1:dim
         # Using gamma to sample inverse gamma R.V. is always more robust in Julia
-        σ2 = rand(truncated(Gamma(a, 1/bb[p]), 1/u_σ2, 1/l_σ2), n_mc) 
+        σ2 = rand(truncated(Gamma(a, 1/b[p]), 1/u_σ2, 1/l_σ2), n_mc) 
         @assert all(σ2 .> 0)
         Λ[p, p, :] .= 1 ./ σ2
     end  
@@ -42,7 +41,7 @@ function rand_inv_gamma_mc(a, bb::Vector, n_mc, config::Dict)
 end 
 
 
-function sample_repulsive_gauss!(X, Mu, Sig, ℓ, config::Dict)
+function sample_repulsive_gauss!(X, Mu, Sig, ℓ, config)
     g₀ = config["g₀"] 
     a₀ = config["a₀"] 
     b₀ = config["b₀"]

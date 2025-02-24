@@ -15,10 +15,10 @@ Random.seed!(200)
 
 function main()
 	data = CSV.File("./data/joensuu.csv", delim=' ') |> DataFrame 
-	X = Matrix(data[:, 1:2]) |> transpose |> Matrix	 
+	X = Matrix(data[:, 1:2]) |> transpose 
 
 	dim = size(X, 1) 	
-	g₀ = 0.005
+	g₀ = 2.5e-5
 	β = 1.
 	τ = 0.1
 	a₀ = 1.
@@ -31,17 +31,15 @@ function main()
 		X; g₀=g₀, K=K, β=β, τ=τ, a₀=a₀, b₀=b₀, 
 		l_σ2=l_σ2, u_σ2=u_σ2,
 		burnin=2500, runs=5000, thinning=10) 
-
-	println(C_mc[end])
-	println(countmap(C_mc[end]))
-	# # println(Mu_mc[950:end])
-	# # println(Sigma_mc[950:end])
  
-	mkpath("results/old_faithful/")
+	println(
+		"Cluster distribution from the last iteration: ", countmap(C_mc[end])) 
+ 
+	mkpath("results/joensuu/")
 	C_df = DataFrame(C_mc, :auto)
-	CSV.write("results/old_faithful/C_mc.csv", C_df)
+	CSV.write("results/joensuu/C_mc.csv", C_df)
 	K_df = DataFrame(K_mc', :auto)
-	CSV.write("results/old_faithful/K_mc.csv", K_df)
+	CSV.write("results/joensuu/K_mc.csv", K_df)
   
 	plots = []
 	for i in 0:3

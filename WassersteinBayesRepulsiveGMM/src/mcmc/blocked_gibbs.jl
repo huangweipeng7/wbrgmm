@@ -1,9 +1,7 @@
 function blocked_gibbs(
-    X::Matrix;
-    g₀ = 100., β = 1., a₀ = 1., b₀ = 1., 
-    l_σ2 = 0.001, u_σ2 = 10000., τ = 1.,
-    K::Int = 5, t_max::Int = 2,
-    burnin::Int = 2000, runs::Int = 3000, thinning::Int = 1)
+    X; g₀ = 100., β = 1., a₀ = 1., b₀ = 1., 
+    l_σ2 = 0.001, u_σ2 = 10000., τ = 1., K = 5, 
+    t_max = 2, burnin = 2000, runs = 3000, thinning = 1)
 
     dim, n = size(X)
 
@@ -16,7 +14,7 @@ function blocked_gibbs(
     Mu_mc = Vector{Array}()
     Sig_mc = Vector{Array}()
     K_mc = Vector{Int}()
-    llhd_mc = Vector{Real}()
+    llhd_mc = Vector{Float64}()
   
     C = zeros(Int, n) 
     Mu = zeros(dim, K+1)
@@ -36,8 +34,7 @@ function blocked_gibbs(
         
         post_sample_repulsive_gauss!(X, Mu, Sig, C, config)
 
-        set_description(
-            pbar, "loglikelihood: $(round(llhd, sigdigits=3))")
+        set_description(pbar, f"loglikelihood: {llhd:.3f}")
         
         if iter > burnin && iter % thinning == 0 
             push!(C_mc, deepcopy(C))
@@ -51,11 +48,7 @@ function blocked_gibbs(
 end 
 
 
-gumbel_max_sample(lp) = lp + rand(GUMBEL, size(lp)) |> argmax
-
-
-function post_sample_C!(X::Matrix, Mu::Matrix, Sig::Array, C::Vector{Int}, 
-                        logV::Vector, Zₖ::Vector, config::Dict) 
+function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, config) 
 
     size(Mu, 2) == size(Sig, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions.")) 
@@ -70,12 +63,14 @@ function post_sample_C!(X::Matrix, Mu::Matrix, Sig::Array, C::Vector{Int},
     lc = Vector()
     llhd = 0.  
     for i = 1:n  
-        x = vec(X[:, i])
+        x = X[:, i] 
 
         C_, Mu_, Sig_, ℓ = sample_K_and_swap_indices(
             i, n, C, Mu, Sig, t_max; exclude_i=true)
-        @inbounds C .= C_ 
-        @inbounds C[i] = -1       # pseudo component assignment
+
+        C .= C_ 
+        # pseudo component assignment
+        C[i] = -1                     
         @assert maximum(C) <= ℓ
 
         # K plus 1
@@ -95,7 +90,7 @@ function post_sample_C!(X::Matrix, Mu::Matrix, Sig::Array, C::Vector{Int},
             lc[k] = k != Kp1 ? log(n_k+β) : log(β) + logV[ℓ+1] - logV[ℓ]  
         end
         Mu, Sig = Mu_, Sig_ 
-        C[i] = gumbel_max_sample(lp .+ lc) 
+        C[i] = categorical_from_log(lp .+ lc)
         llhd += lp[C[i]] 
     end  
     return C, Mu, Sig, llhd
@@ -105,7 +100,7 @@ end
 function sample_K_and_swap_indices(
     i, n, C, Mu, Sig, t_max; 
     exclude_i=false, approx=true, X=nothing, 
-    Zₖ=nothing, config=nothing, n_mc=2000)::Tuple
+    Zₖ=nothing, config=nothing, n_mc=2000) 
     
     dim = size(Mu, 1)
     C_ = similar(C)
@@ -137,8 +132,8 @@ function sample_K_and_swap_indices(
     Mu_ = zeros(dim, K+1)
     Sig_ = zeros(dim, dim, K+1)
 
-    Mu_[:, 1:ℓ] .= Mu[:, nz_k_inds]
-    Sig_[:, :, 1:ℓ] .= Sig[:, :, nz_k_inds]  
+    @inbounds Mu_[:, 1:ℓ] .= Mu[:, nz_k_inds]
+    @inbounds Sig_[:, :, 1:ℓ] .= Sig[:, :, nz_k_inds]  
     
     @inbounds for (i_nz, nz_k_ind) in enumerate(nz_k_inds)
         C_[C .== nz_k_ind] .= i_nz
@@ -159,11 +154,11 @@ function post_sample_K_and_swap_indices(
 end 
 
 
-sample_K(log_p_K, ℓ, t_max, n) = ℓ + gumbel_max_sample(log_p_K) - 1
+sample_K(log_p_K, ℓ, t_max, n) = ℓ + categorical_from_log(log_p_K) - 1
 
 
 post_sample_K(log_p_K, Ẑ, Zₖ, ℓ, t_max) = 
-    ℓ + gumbel_max_sample(log_p_K .+ Ẑ .- Zₖ[ℓ:ℓ+t_max-1]) - 1
+    ℓ + categorical_from_log(log_p_K .+ Ẑ .- Zₖ[ℓ:ℓ+t_max-1]) - 1
 
 
 function post_sample_gauss_kernels!(X, Mu, Sig, C, config) 
@@ -187,8 +182,8 @@ function post_sample_gauss_kernels!(X, Mu, Sig, C, config)
             μ₀ = Σ₀ * (inv(Sig[:, :, k]) * x_sum) 
             Mu[:, k] .= MvNormal(μ₀|> vec, Σ₀) |> rand
 
-            aₖ = a₀ + n / 2 
-            bₖ = b₀ .+ sum((X_tmp .- Mu[:, k]).^2; dims=2) / 2 |> vec
+            aₖ = a₀ + n / 2. 
+            bₖ = b₀ .+ sum((X_tmp .- Mu[:, k]).^2; dims=2) / 2. |> vec
             Sig[:, :, k] .= rand_inv_gamma(aₖ, bₖ, config)
         end  
     end 
@@ -196,7 +191,7 @@ end
  
 
 function post_sample_gauss_kernels_mc(
-    X, ℓ, t_max, Mu, Sig, C, config::Dict; n_mc=20) 
+    X, ℓ, t_max, Mu, Sig, C, config; n_mc=20) 
     
     g₀ = config["g₀"] 
     a₀ = config["a₀"] 
@@ -219,11 +214,11 @@ function post_sample_gauss_kernels_mc(
         else
             x_sum = sum(X_tmp; dims=2)  
             Σ₀ = inv(τ^2*I + n * inv(Sig[:, :, k]))
-            μ₀ = Σ₀ * (inv(Sig[:, :, k]) * x_sum) |> vec 
-            Mu_mc[:, k, :] .= rand(MvNormal(μ₀, Σ₀), n_mc)
+            μ₀ = Σ₀ * (inv(Sig[:, :, k]) * x_sum) 
+            Mu_mc[:, k, :] .= rand(MvNormal(μ₀ |> vec, Σ₀), n_mc)
 
-            aₖ = a₀ + n / 2 
-            bₖ = b₀ .+ sum((X_tmp .- Mu[:, k]).^2; dims=2) / 2 |> vec
+            aₖ = a₀ + n / 2. 
+            bₖ = b₀ .+ sum((X_tmp .- Mu[:, k]).^2; dims=2) / 2. |> vec
             Sig_mc[:, :, k, :] .= rand_inv_gamma_mc(aₖ, bₖ, n_mc, config) 
         end  
     end 
@@ -231,7 +226,7 @@ function post_sample_gauss_kernels_mc(
 end 
 
 
-function post_sample_repulsive_gauss!(X, Mu, Sig, C, config::Dict)
+function post_sample_repulsive_gauss!(X, Mu, Sig, C, config)
     min_d = 0.              # min wasserstein distance
     reject_counts = 0 
 
@@ -245,17 +240,15 @@ function post_sample_repulsive_gauss!(X, Mu, Sig, C, config::Dict)
 end 
  
 
-function initialize!(
-    X::Matrix, Mu::Array, Sig::Array, C::Vector, config::Dict) 
-    
+function initialize!(X, Mu, Sig, C, config) 
     size(Mu, 2) == size(Sig, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions."))
     
     dim, K = size(Mu)
 
     sample_repulsive_gauss!(X, Mu, Sig, 0, config)
-    # C[:] .= sample(1:K-1, n, replace=true) 
 
+    # function inside another function
     normal_k(k) = MvNormal(Mu[:, k], Sig[:, :, k])
     @inbounds for i in eachindex(C)
         # Make sure that the last cluster is not assigned anything
