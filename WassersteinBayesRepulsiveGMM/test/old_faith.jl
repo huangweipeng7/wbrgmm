@@ -29,8 +29,7 @@ function main()
 
     C_mc, Mu_mc, Sigma_mc, K_mc, llhd_mc = blocked_gibbs(
         X; g₀=g₀, K=K, β=β, τ=τ, a₀=a₀, b₀=b₀, 
-        l_σ2=l_σ2, u_σ2=u_σ2,
-        burnin=2500, runs=5000, thinning=1) 
+        l_σ2=l_σ2, u_σ2=u_σ2, burnin=2500, runs=5000, thinning=1) 
 
     println(
         "Cluster distribution from the last iteration: ", countmap(C_mc[end])) 
@@ -47,8 +46,9 @@ function main()
             legend=:none,
             cmap=:summer, 
             marker_z=C_mc[end-i], 
-            markersize=3)
-        push!(plots, p)
+            markersize=2.5,
+            alpha=0.5)
+        for i in 0:3 
     ]
     p = plot(plots..., layout=4)
     savefig(p, "test.pdf") 
