@@ -1,7 +1,9 @@
-function wrbgmm_blocked_gibbs(
-    X; g₀ = 100., β = 1., a₀ = 1., b₀ = 1., 
-    l_σ2 = 0.001, u_σ2 = 10000., τ = 1., K = 5, 
-    t_max = 2, burnin = 2000, runs = 3000, thinning = 1)
+@inline function wrbgmm_blocked_gibbs(
+    X; g₀ = 100., β = 1., 
+    a₀ = 1., b₀ = 1., τ = 1.,
+    l_σ2 = 0.001, u_σ2 = 10000.,   
+    g_prior = nothing,
+    K = 5, t_max = 2, burnin = 2000, runs = 3000, thinning = 1)
 
     dim, n = size(X)
 
@@ -48,13 +50,14 @@ function wrbgmm_blocked_gibbs(
 end 
 
 
-function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, config) 
+@inline function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, config) 
 
     size(Mu, 2) == size(Sig, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions.")) 
  
     t_max = config["t_max"]
     β = config["β"]  
+    logβ = log(β)
 
     n = size(X, 2)
     K = size(Mu, 2)     
@@ -62,7 +65,7 @@ function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, config)
     lp = Vector()
     lc = Vector()
     llhd = 0.  
-    for i = 1:n  
+    @inbounds for i = 1:n  
         x = X[:, i] 
 
         C_, Mu_, Sig_, ℓ = sample_K_and_swap_indices(
@@ -77,27 +80,28 @@ function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, config)
         Kp1 = size(Mu_, 2)  
 
         sample_repulsive_gauss!(X, Mu_, Sig_, ℓ, config)
-        @inbounds for k = 1:Kp1
-            @assert all(diag(Sig_[:, :, k]) .> 0) Sig_[:, :, k]
-        end  
+
+        # @inbounds for k = 1:Kp1
+        #     @assert all(diag(Sig_[:, :, k]) .> 0) Sig_[:, :, k]
+        # end  
         
         # resize the vectors for loglikelihood of data and the corresponding coefficients
         resize!(lp, Kp1) 
         resize!(lc, Kp1) 
-        @inbounds for k = 1:Kp1 
+        for k = 1:Kp1 
             n_k = sum(C .== k) 
             lp[k] = logpdf(MvNormal(Mu_[:, k], Sig_[:, :, k]), x) 
-            lc[k] = k != Kp1 ? log(n_k+β) : log(β) + logV[ℓ+1] - logV[ℓ]  
+            lc[k] = k != Kp1 ? log(n_k + β) : logβ + logV[ℓ+1] - logV[ℓ]  
         end
         Mu, Sig = Mu_, Sig_ 
-        C[i] = categorical_from_log(lp .+ lc)
+        C[i] = gumbel_max_sample(lp .+ lc)
         llhd += lp[C[i]] 
     end  
     return C, Mu, Sig, llhd
 end   
 
 
-function sample_K_and_swap_indices(
+@inline function sample_K_and_swap_indices(
     i, n, C, Mu, Sig, t_max; 
     exclude_i=false, approx=true, X=nothing, 
     Zₖ=nothing, config=nothing, n_mc=2000) 
@@ -142,7 +146,7 @@ function sample_K_and_swap_indices(
 end 
 
 
-function post_sample_K_and_swap_indices(
+@inline function post_sample_K_and_swap_indices(
     X, C, Mu, Sig, Zₖ, t_max; 
     approx=true, config=nothing, n_mc=nothing) 
 
@@ -154,106 +158,124 @@ function post_sample_K_and_swap_indices(
 end 
 
 
-sample_K(log_p_K, ℓ, t_max, n) = ℓ + categorical_from_log(log_p_K) - 1
+@inline sample_K(log_p_K, ℓ, t_max, n) = 
+    ℓ + gumbel_max_sample(log_p_K) - 1
 
 
-post_sample_K(log_p_K, Ẑ, Zₖ, ℓ, t_max) = 
-    ℓ + categorical_from_log(log_p_K .+ Ẑ .- Zₖ[ℓ:ℓ+t_max-1]) - 1
+@inline post_sample_K(log_p_K, Ẑ, Zₖ, ℓ, t_max) = 
+    ℓ + gumbel_max_sample(log_p_K .+ Ẑ .- Zₖ[ℓ:ℓ+t_max-1]) - 1
 
 
-function post_sample_gauss_kernels!(X, Mu, Sig, C, config) 
-    g₀ = config["g₀"] 
-    a₀ = config["a₀"] 
-    b₀ = config["b₀"]
-    τ = config["τ"] 
-
-    dim, K = size(Mu)  
-    normal = MvNormal(zeros(dim), τ^2)  
+@inline function post_sample_gauss!(X, Mu, Sig, C, config) 
+    K = size(Mu, 2)   
     @inbounds for k = 1:K
-        X_tmp = X[:, C.==k] 
-        n = size(X_tmp, 2) 
+        Xₖ = X[:, C .== k]
 
-        if n == 0 
-            Mu[:, k] .= rand(normal)
-            Sig[:, :, k] .= rand_inv_gamma(a₀, b₀, config)
-        else  
-            x_sum = sum(X_tmp; dims=2)  
-            Σ₀ = inv(τ^2 * I + n * inv(Sig[:, :, k]))
-            μ₀ = Σ₀ * (inv(Sig[:, :, k]) * x_sum) 
-            Mu[:, k] .= MvNormal(μ₀|> vec, Σ₀) |> rand
+        μ, Σ = size(Xₖ, 2) == 0 ? 
+            sample_gauss(config) : 
+            post_sample_gauss(Xₖ, Mu[:, k], Sig[:, :, k], config)
 
-            aₖ = a₀ + n / 2. 
-            bₖ = b₀ .+ sum((X_tmp .- Mu[:, k]).^2; dims=2) / 2. |> vec
-            Sig[:, :, k] .= rand_inv_gamma(aₖ, bₖ, config)
-        end  
+        Mu[:, k] .= μ
+        Sig[:, :, k] .= Σ
     end 
 end 
- 
 
-function post_sample_gauss_kernels_mc(
-    X, ℓ, t_max, Mu, Sig, C, config; n_mc=20) 
-    
-    g₀ = config["g₀"] 
+
+@inline function post_sample_gauss(X, μ, Σ, config) 
     a₀ = config["a₀"] 
     b₀ = config["b₀"]
     τ = config["τ"]
 
-    dim = size(Mu, 1)  
-    K = ℓ + t_max - 1
-    Mu_mc = zeros(dim, K, n_mc)
-    Sig_mc = zeros(dim, dim, K, n_mc)
+    x_sum = sum(X; dims=2)  
+
+    n = size(X, 2)
+
+    invΣ = inv(Σ)
+    Σ₀ = inv(τ^2 * I + n * invΣ)
+    μ₀ = Σ₀ * (invΣ * x_sum) 
+    μ .= MvNormal(μ₀|> vec, Σ₀) |> rand
+
+    aₖ = a₀ + n / 2. 
+    bₖ = b₀ .+ sum((X .- μ).^2; dims=2) / 2. |> vec
+    Σ .= rand_inv_gamma(aₖ, bₖ, config)
+    return μ, Σ
+end  
+
+
+# function post_sample_gauss_kernels_mc(
+#     X, ℓ, t_max, Mu, Sig, C, config; n_mc=20) 
     
-    normal = MvNormal(zeros(dim), τ^2) 
-    @inbounds for k in 1:K
-        X_tmp = X[:, C.==k] 
-        n = size(X_tmp, 2) 
+#     g₀ = config["g₀"] 
+#     a₀ = config["a₀"] 
+#     b₀ = config["b₀"]
+#     τ = config["τ"]
 
-        if n == 0 
-            Mu_mc[:, k, :] .= rand(normal, n_mc)
-            Sig_mc[:, :, k, :] .= rand_inv_gamma_mc(a₀, b₀, n_mc, config)
-        else
-            x_sum = sum(X_tmp; dims=2)  
-            Σ₀ = inv(τ^2*I + n * inv(Sig[:, :, k]))
-            μ₀ = Σ₀ * (inv(Sig[:, :, k]) * x_sum) 
-            Mu_mc[:, k, :] .= rand(MvNormal(μ₀ |> vec, Σ₀), n_mc)
+#     dim = size(Mu, 1)  
+#     K = ℓ + t_max - 1
+#     Mu_mc = zeros(dim, K, n_mc)
+#     Sig_mc = zeros(dim, dim, K, n_mc)
+    
+#     normal = MvNormal(zeros(dim), τ^2) 
+#     @inbounds for k in 1:K
+#         X_tmp = X[:, C.==k] 
+#         n = size(X_tmp, 2) 
 
-            aₖ = a₀ + n / 2. 
-            bₖ = b₀ .+ sum((X_tmp .- Mu[:, k]).^2; dims=2) / 2. |> vec
-            Sig_mc[:, :, k, :] .= rand_inv_gamma_mc(aₖ, bₖ, n_mc, config) 
-        end  
-    end 
-    return Mu_mc, Sig_mc
-end 
+#         if n == 0 
+#             Mu_mc[:, k, :] .= rand(normal, n_mc)
+#             Sig_mc[:, :, k, :] .= rand_inv_gamma_mc(a₀, b₀, n_mc, config)
+#         else
+#             x_sum = sum(X_tmp; dims=2)  
+#             Σ₀ = inv(τ^2*I + n * inv(Sig[:, :, k]))
+#             μ₀ = Σ₀ * (inv(Sig[:, :, k]) * x_sum) 
+#             Mu_mc[:, k, :] .= rand(MvNormal(μ₀ |> vec, Σ₀), n_mc)
+
+#             aₖ = a₀ + n / 2. 
+#             bₖ = b₀ .+ sum((X_tmp .- Mu[:, k]).^2; dims=2) / 2. |> vec
+#             Sig_mc[:, :, k, :] .= rand_inv_gamma_mc(aₖ, bₖ, n_mc, config) 
+#         end  
+#     end 
+#     return Mu_mc, Sig_mc
+# end 
 
 
-function post_sample_repulsive_gauss!(X, Mu, Sig, C, config)
+@inline function post_sample_repulsive_gauss!(X, Mu, Sig, C, config)
     min_d = 0.              # min wasserstein distance
     reject_counts = 0 
 
     g₀ = config["g₀"]
     while rand() > min_d 
         reject_counts += 1 
-        post_sample_gauss_kernels!(X, Mu, Sig, C, config)
+        post_sample_gauss!(X, Mu, Sig, C, config)
         min_d = min_wass_distance(Mu, Sig, g₀)
     end
     return reject_counts 
 end 
  
 
-function initialize!(X, Mu, Sig, C, config) 
+@inline function initialize!(X, Mu, Sig, C, config) 
     size(Mu, 2) == size(Sig, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions."))
     
-    dim, K = size(Mu)
+    K = size(Mu, 2)
 
     sample_repulsive_gauss!(X, Mu, Sig, 0, config)
 
-    # function inside another function
-    normal_k(k) = MvNormal(Mu[:, k], Sig[:, :, k])
-    @inbounds for i in eachindex(C)
-        # Make sure that the last cluster is not assigned anything
-        C[i] = (argmax ∘ map)(
-            k -> logpdf(normal_k(k), X[:, i]), 1:K-1)
-    end
+    # inner functions 
+    # Assign the component index to each ob by their max log likelihoods
+    log_i_k(i, k) = logpdf(MvNormal(Mu[:, k], Sig[:, :, k]), X[:, i])
+ 
+    if Threads.nthreads() > 1
+        Threads.@threads for i in eachindex(C)
+            # Make sure that the last cluster is not assigned anything
+            C[i] = log_i_k.(Ref(i), 1:K-1) |> argmax
+        end
+    else 
+        for i in eachindex(C)
+            # Make sure that the last cluster is not assigned anything
+            C[i] = log_i_k.(Ref(i), 1:K-1) |> argmax
+        end
+    end 
 end 
  
+
+gumbel_max_sample(logits) = logits + rand(GUMBEL, length(logits)) |> argmax

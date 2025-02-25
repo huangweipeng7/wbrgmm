@@ -1,4 +1,4 @@
-function numerical_Zhat(Mu_mc, Sig_mc, g₀, ℓ, t_max) 
+@inline function numerical_Zhat(Mu_mc, Sig_mc, g₀, ℓ, t_max) 
     n_mc = size(Mu_mc, 3) 
     gg = zeros(Float64, t_max, n_mc)
 

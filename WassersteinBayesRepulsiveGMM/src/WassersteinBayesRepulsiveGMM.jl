@@ -1,6 +1,8 @@
 module WassersteinBayesRepulsiveGMM
 
 export wrbgmm_blocked_gibbs
+
+import Base.rand
  
 using Distributions 
 using FStrings
@@ -19,6 +21,7 @@ include("numerical_Zhat.jl")
 
 include("measure/wasserstein.jl")
 include("mcmc/blocked_gibbs.jl")
+include("mcmc/niw.jl")
 include("mcmc/prior_sampler.jl")
 
 

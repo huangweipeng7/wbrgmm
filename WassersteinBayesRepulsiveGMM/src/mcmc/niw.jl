@@ -9,11 +9,11 @@ NorInvWishart(κ₀, μ₀, ν₀, Φ₀) =
     NorInvWishart(κ₀, μ₀, InverseWishart(ν₀, Φ₀)) 
 
 
-logpdf(niw::NorInvWishart, μ, Σ) = 
-    logpdf(MvNormal(niw.μ₀, Σ/niw.κ₀), μ) + logpdf(niw.iw, Σ)
+# logpdf(niw::NorInvWishart, μ, Σ) = 
+#     logpdf(MvNormal(niw.μ₀, Σ/niw.κ₀), μ) + logpdf(niw.iw, Σ)
 
 
-function rand(niw::NormalInverseWishart)  
+@inline function rand(niw::NorInvWishart)  
     Σ = rand(niw.iw)   
     μ = MvNormal(niw.μ₀, Σ./niw.κ₀) |> rand  
     return μ, Σ
@@ -31,23 +31,28 @@ function reset!(
 end 
 
 
-function post_sample_gauss_kernels!(X, Mu, Sig, C, g_prior::NorInvWishart)
+@inline function post_sample_gauss!(X, Mu, Sig, C, g_prior::NorInvWishart)
     K = size(Mu, 1)
 
     @inbounds for k in 1:K
-        X_tmp = X[:, C.==k] 
+        Xₖ = X[:, C .== k] 
         n = size(X_tmp, 2)  
+        
         μ, Σ = n == 0 ? 
-            rand(g_prior) : post_sample_gauss_kernel(X_tmp, g_prior)
+            sample_gauss(g_prior) : 
+            post_sample_gauss(Xₖ, g_prior)
+        
         Mu[k, :] .= μ[:] 
         Sig[k, :, :] .= Σ[:, :]
     end 
 end 
 
 
-function post_sample_gauss_kernel(X, g_prior::NorInvWishart)
+@inline function post_sample_gauss(X, g_prior::NorInvWishart)
     # An inner function for computing the covariance
     cov2(X) = cov(X; dims=2, corrected=false)
+
+    n = size(X, 2)
 
     x̄ = mean(X; dims=2)
     κ₀ = g_prior.κ₀ + n  

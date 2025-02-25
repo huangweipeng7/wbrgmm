@@ -1,5 +1,5 @@
 # Numerical Computation of ZK as in algorithm 1
-function numerical_Zₖ(K_max, dim, config; n_mc = 100)
+@inline function numerical_Zₖ(K_max, dim, config; n_mc = 100)
     g₀ = config["g₀"]
     a₀ = config["a₀"]
     b₀ = config["b₀"]
