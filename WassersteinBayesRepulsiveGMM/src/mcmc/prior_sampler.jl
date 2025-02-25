@@ -59,3 +59,21 @@ function sample_repulsive_gauss!(X, Mu, Sig, ℓ, config)
         min_d = min_wass_distance(Mu, Sig, g₀)
     end 
 end 
+
+
+
+
+function sample_repulsive_gauss!(X, Mu, Sig, ℓ, g_prior)
+    g₀ = config["g₀"]  
+    K = size(Mu, 2)
+
+    min_d = 0.     # min wasserstein distance 
+    while rand() > min_d   
+        @inbounds for k in ℓ+1:K 
+            μ, Σ = rand(g_prior)
+            Mu[:, k] .= μ
+            Sig[:, :, k] .= Σ 
+        end 
+        min_d = min_wass_distance(Mu, Sig, g₀)
+    end 
+end 

@@ -1,10 +1,11 @@
 module WassersteinBayesRepulsiveGMM
 
-export blocked_gibbs
+export wrbgmm_blocked_gibbs
  
 using Distributions 
 using FStrings
 using LinearAlgebra 
+using LoopVectorization
 using ProgressBars
 using Random 
 using SpecialFunctions
@@ -21,7 +22,7 @@ include("mcmc/blocked_gibbs.jl")
 include("mcmc/prior_sampler.jl")
 
 
-dlogpdf = Distributions.logpdf
+logpdf = Distributions.logpdf
 
 const GUMBEL = Gumbel(0, 1)
 

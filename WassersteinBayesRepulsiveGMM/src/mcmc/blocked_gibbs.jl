@@ -1,4 +1,4 @@
-function blocked_gibbs(
+function wrbgmm_blocked_gibbs(
     X; g₀ = 100., β = 1., a₀ = 1., b₀ = 1., 
     l_σ2 = 0.001, u_σ2 = 10000., τ = 1., K = 5, 
     t_max = 2, burnin = 2000, runs = 3000, thinning = 1)
@@ -86,7 +86,7 @@ function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, config)
         resize!(lc, Kp1) 
         @inbounds for k = 1:Kp1 
             n_k = sum(C .== k) 
-            lp[k] = dlogpdf(MvNormal(Mu_[:, k], Sig_[:, :, k]), x) 
+            lp[k] = logpdf(MvNormal(Mu_[:, k], Sig_[:, :, k]), x) 
             lc[k] = k != Kp1 ? log(n_k+β) : log(β) + logV[ℓ+1] - logV[ℓ]  
         end
         Mu, Sig = Mu_, Sig_ 
@@ -253,7 +253,7 @@ function initialize!(X, Mu, Sig, C, config)
     @inbounds for i in eachindex(C)
         # Make sure that the last cluster is not assigned anything
         C[i] = (argmax ∘ map)(
-            k -> dlogpdf(normal_k(k), X[:, i]), 1:K-1)
+            k -> logpdf(normal_k(k), X[:, i]), 1:K-1)
     end
 end 
  

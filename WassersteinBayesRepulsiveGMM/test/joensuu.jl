@@ -18,7 +18,7 @@ function main()
 	X = Matrix(data[:, 1:2]) |> transpose 
 
 	dim = size(X, 1) 	
-	g₀ = 2.5e-5
+	g₀ = 0.005
 	β = 1.
 	τ = 0.1
 	a₀ = 1.
@@ -27,7 +27,7 @@ function main()
 	u_σ2 = 100.
 	K = 10
  
-	C_mc, Mu_mc, Sig_mc, K_mc, llhd_mc = blocked_gibbs(
+	C_mc, Mu_mc, Sig_mc, K_mc, llhd_mc = wrbgmm_blocked_gibbs(
 		X; g₀=g₀, K=K, β=β, τ=τ, a₀=a₀, b₀=b₀, 
 		l_σ2=l_σ2, u_σ2=u_σ2,
 		burnin=2500, runs=5000, thinning=10) 
@@ -49,7 +49,7 @@ function main()
 			# cmap=:summer, 
 			marker_z=C_mc[end-i], 
 			markersize=3)
-		push!(plots, p)
+		for i in 0:3
 	end 
 	p = plot(plots..., layout=4)
 	savefig(p, "test.pdf") 
