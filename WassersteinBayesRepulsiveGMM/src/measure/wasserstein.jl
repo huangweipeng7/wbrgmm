@@ -18,14 +18,32 @@ end
     size(Mu, 2) == size(Sig, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions."))
 
-    K = size(Mu, 2)  
-    min_d = 1.
+    K = size(Mu, 2)   
+    hₖ = 1.
     for i in 1:K-1, j in i+1:K
         @inbounds d = wass_gauss(
             Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])  
-        min_d = min(min_d, d/(d+g₀))
-    end  
-    return min_d
+        hₖ = min(hₖ, d/(d+g₀)) 
+    end   
+    return hₖ
+end 
+
+
+@inline function single_mean_wass_distance(Mu, Sig, g₀)
+    size(Mu, 2) == size(Sig, 3) ||
+        throw(DimensionMismatch("Inconsistent array dimensions."))
+
+    K = size(Mu, 2)   
+    loghₖ = 0.
+    count = 0.5K * (K-1) 
+    for i in 1:K-1, j in i+1:K
+        @inbounds d = wass_gauss(
+            Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])   
+        loghₖ += log(d) - log(d + g₀)
+        count += 1
+    end   
+    hₖ = exp(loghₖ/count)
+    return hₖ
 end 
 
 
@@ -34,12 +52,12 @@ end
         throw(DimensionMismatch("Inconsistent array dimensions."))
 
     K = size(Mu, 2)  
-    min_d = 1. 
+    hₖ = 1. 
     indices = filter(c -> c[1] < c[2], CartesianIndices((1:K, 1:K)))
     Threads.@threads for (i, j) in Tuple.(indices)
         @inbounds d = wass_gauss(
             Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])  
-        min_d = min(min_d, d/(d+g₀))
+        hₖ = min(hₖ, d/(d+g₀))
     end  
-    return min_d
+    return hₖ
 end 

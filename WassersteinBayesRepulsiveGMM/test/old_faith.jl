@@ -32,7 +32,8 @@ function main()
         l_σ2=l_σ2, u_σ2=u_σ2, burnin=2500, runs=5000, thinning=1) 
 
     println(
-        "Cluster distribution from the last iteration: ", countmap(C_mc[end])) 
+        "Cluster distribution from the last iteration: \n", 
+        countmap(C_mc[end])) 
 
     mkpath("results/old_faithful/")
     C_df = DataFrame(C_mc, :auto)

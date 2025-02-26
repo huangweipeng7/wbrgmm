@@ -36,7 +36,7 @@
         
         post_sample_repulsive_gauss!(X, Mu, Sig, C, config)
 
-        set_description(pbar, f"loglikelihood: {llhd:.3f}")
+        set_description(pbar, f"log-likelihood: {llhd:.3f}")
         
         if iter > burnin && iter % thinning == 0 
             push!(C_mc, deepcopy(C))
@@ -260,8 +260,8 @@ end
 
     sample_repulsive_gauss!(X, Mu, Sig, 0, config)
 
-    # inner functions 
-    # Assign the component index to each ob by their max log likelihoods
+    # Inner functions: Assign the component index to each 
+    # observation according to their max log-likelihoods
     log_i_k(i, k) = logpdf(MvNormal(Mu[:, k], Sig[:, :, k]), X[:, i])
  
     if Threads.nthreads() > 1
@@ -269,7 +269,7 @@ end
             # Make sure that the last cluster is not assigned anything
             C[i] = log_i_k.(Ref(i), 1:K-1) |> argmax
         end
-    else 
+    else     
         for i in eachindex(C)
             # Make sure that the last cluster is not assigned anything
             C[i] = log_i_k.(Ref(i), 1:K-1) |> argmax
@@ -278,4 +278,4 @@ end
 end 
  
 
-gumbel_max_sample(logits) = logits + rand(GUMBEL, length(logits)) |> argmax
+gumbel_max_sample(logits) = argmax(logits + rand(GUMBEL, length(logits))) 
