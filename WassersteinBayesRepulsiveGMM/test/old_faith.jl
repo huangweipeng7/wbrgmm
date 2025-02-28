@@ -1,6 +1,8 @@
 using CSV
 using DataFrames
+using Distributions
 using LinearAlgebra 
+using PDMats
 using Plots, StatsPlots
 using Random 
 using StatsBase
@@ -23,12 +25,15 @@ function main()
     τ = 0.1
     a₀ = 1.
     b₀ = 1.
-    l_σ2 = 0.001
-    u_σ2 = 100.
+    l_σ2 = 1e-12
+    u_σ2 = 1e12
     K = 5
 
+    prior = EigBoundedNorInverseWishart(
+        l_σ2, u_σ2, 5, zeros(dim), 2, 0.01I(dim))
+
     C_mc, Mu_mc, Sigma_mc, K_mc, llhd_mc = wrbgmm_blocked_gibbs(
-        X; g₀=g₀, K=K, β=β, τ=τ, a₀=a₀, b₀=b₀, 
+        X; g₀=g₀, K=K, β=β, τ=τ, a₀=a₀, b₀=b₀, prior=prior, 
         l_σ2=l_σ2, u_σ2=u_σ2, burnin=2500, runs=5000, thinning=1) 
 
     println(

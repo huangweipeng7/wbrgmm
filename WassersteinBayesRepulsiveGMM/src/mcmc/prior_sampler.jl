@@ -38,48 +38,28 @@ end
 end 
 
 
-@inline function sample_gauss(config::Dict)   
-    μ = randn(config["dim"]) * config["τ"] 
-    Σ = rand_inv_gamma(config["a₀"], config["b₀"], config)
-    return μ, Σ
-end 
+# @inline function sample_gauss(config::Dict)   
+#     μ = randn(config["dim"]) * config["τ"] 
+#     Σ = rand_inv_gamma(config["a₀"], config["b₀"], config)
+#     return μ, Σ
+# end 
 
 
-@inline function sample_repulsive_gauss!(X, Mu, Sig, ℓ, config)
-    g₀ = config["g₀"] 
-    K = size(Mu, 2) 
+# @inline function sample_repulsive_gauss!(X, Mu, Sig, ℓ, config)
+#     g₀ = config["g₀"] 
+#     K = size(Mu, 2) 
 
-    min_d = 0.     # min wasserstein distance 
-    while rand() > min_d   
-        @inbounds for k in ℓ+1:K 
-            μ, Σ = sample_gauss(config)
-            Mu[:, k] .= μ
-            Sig[:, :, k] .= Σ
-        end 
-        min_d = min_wass_distance(Mu, Sig, g₀)
-    end 
-end 
-
-
-#
-# Code for sampling using a Normal-Inverse-Wishart prior.
-#
-
-@inline sample_gauss(g_prior::NorInvWishart) = rand(g_prior) 
+#     min_d = 0.     # min wasserstein distance 
+#     while rand() > min_d   
+#         @inbounds for k in ℓ+1:K 
+#             μ, Σ = sample_gauss(config)
+#             Mu[:, k] .= μ
+#             Sig[:, :, k] .= Σ
+#         end 
+#         min_d = min_wass_distance(Mu, Sig, g₀)
+#     end 
+# end 
 
 
-@inline function sample_repulsive_gauss!(X, Mu, Sig, ℓ, config, g_prior)
-    g₀ = config["g₀"]  
-    K = size(Mu, 2)
 
-    min_d = 0.     # min wasserstein distance 
-    while rand() > min_d   
-        @inbounds for k in ℓ+1:K 
-            μ, Σ = sample_gauss(g_prior)
-            Mu[:, k] .= μ
-            Sig[:, :, k] .= Σ 
-        end 
-        min_d = min_wass_distance(Mu, Sig, g₀)
-    end 
-end 
   
