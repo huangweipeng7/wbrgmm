@@ -22,7 +22,7 @@ end
     hₖ = 1.
     for i in 1:K-1, j in i+1:K
         @inbounds d = wass_gauss(
-            Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])  
+            Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])
         hₖ = min(hₖ, d/(d+g₀)) 
     end   
     return hₖ
@@ -40,7 +40,6 @@ end
         @inbounds d = wass_gauss(
             Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])   
         loghₖ += log(d) - log(d + g₀)
-        count += 1
     end   
     hₖ = exp(loghₖ/count)
     return hₖ

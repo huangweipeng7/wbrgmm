@@ -16,14 +16,12 @@ EigBoundedNorInverseWishart(l_σ2, u_σ2, κ₀, μ₀, ν₀, Φ₀) =
 #     logpdf(MvNormal(niw.μ₀, Σ/niw.κ₀), μ) + logpdf(niw.iw, Σ)
 
 
-@inline function rand(niw::EigBoundedNorInverseWishart)  
+@inline function sample_gauss(niw::EigBoundedNorInverseWishart)  
     Σ = rand(niw.iw)      
     eig_v_Σ = eigvals(Σ)
 
     count = 0
     while first(eig_v_Σ) < niw.l_σ2 || last(eig_v_Σ) > niw.u_σ2 
-        println(eig_v_Σ, " ", niw.l_σ2, " ", niw.u_σ2, "  prior  ", Σ)
-        println(niw.iw)
         Σ[:, :] .= rand(niw.iw)      
         eig_v_Σ = eigvals(Σ)
 
@@ -49,7 +47,7 @@ end
 
 
 @inline function post_sample_gauss!(X, Mu, Sig, C, g_prior::EigBoundedNorInverseWishart)
-    K = size(Mu, 1)
+    K = size(Mu, 2)
 
     @inbounds for k in 1:K
         Xₖ = X[:, C .== k] 
@@ -73,35 +71,36 @@ end
   
     x̄ = mean(X; dims=2)
     κₙ = niw.κ₀ + n  
+    μₙ = vec(niw.κ₀ * niw.μ₀ + n * x̄) / κₙ  
     νₙ = niw.iw.df + n 
-    μₙ = vec(niw.κ₀ * niw.μ₀ + n * x̄) / κₙ 
-
-    println(X, "  ", cov2(X) * n, "  ", (niw.κ₀ * n / κₙ), 
-        "   ", 
-        (x̄ - niw.μ₀) * transpose(x̄ - niw.μ₀))
     Φₙ = Matrix(niw.iw.Ψ) + cov2(X) * n + (niw.κ₀ * n / κₙ) * 
-        (x̄ - niw.μ₀) * transpose(x̄ - niw.μ₀)   
-    println(inv(Φₙ))
+        (x̄ - niw.μ₀) * transpose(x̄ - niw.μ₀)    
+    Φₙ .= round.(Φₙ, digits=10)
 
-    count = 0
-    iw = InverseWishart(νₙ, inv(Φₙ))
-    Σ = rand(iw)      
-    eig_v_Σ = eigvals(Σ)
+    niw_p = EigBoundedNorInverseWishart(niw.l_σ2, niw.u_σ2, κₙ, μₙ, νₙ, Φₙ)
+    μ, Σ = sample_gauss(niw_p)
+    # count = 0
+    # # Numerical instability will fail the hermitain check
+    # iw = InverseWishart(νₙ, round.(Φₙ, digits=10))  
+    # Σ = rand(iw)      
+    # eig_v_Σ = eigvals(Σ)
 
-    while first(eig_v_Σ) < niw.l_σ2 || last(eig_v_Σ) > niw.u_σ2  
-        # println(eig_v_Σ, " ", niw.l_σ2, " ", niw.u_σ2, "  post ", Σ)
-        # println(niw.iw)
+    # while first(eig_v_Σ) < niw.l_σ2 || last(eig_v_Σ) > niw.u_σ2  
+    #     Σ[:, :] .= rand(iw)      
+    #     eig_v_Σ = eigvals(Σ)
 
-        Σ[:, :] .= rand(iw)      
-        eig_v_Σ = eigvals(Σ)
+    #     count += 1
 
-        count += 1
+    #     count <= 1000 || 
+    #         throw("Posterior sampling of the kernels takes too long.")
+    # end 
+    # μ = MvNormal(μₙ, Φₙ/κₙ) |> rand 
 
-        count <= 2000 || 
-            throw("Posterior sampling of the kernels takes too long.")
-    end 
+    # ν = νₙ - dim + 1
+    # μ = MvTDist(ν, μₙ, Φₙ/(κₙ*ν)) |> rand 
 
-    ν = νₙ - dim + 1
-    μ = MvTDist(ν, μₙ, Φₙ/(κₙ*ν)) |> rand 
+    # println(iw)
+    # println(μ, " ", Σ)
+    # println(x̄, " ", cov2(X), "\n")
     return μ, Σ
 end 

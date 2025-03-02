@@ -27,12 +27,14 @@
     Zₖ = numerical_Zₖ(2K, dim, config)
     
     pbar = ProgressBar(1:(burnin+runs))
-    @inbounds for iter in pbar
+    @inbounds for iter in pbar #1:(burnin+runs)
+        # println(iter)
         C, Mu, Sig, llhd = post_sample_C!(
             X, Mu, Sig, C, logV, Zₖ, config, prior) 
 
         C, Mu, Sig, _ = post_sample_K_and_swap_indices(
             X, C, Mu, Sig, Zₖ, t_max; approx=true)  
+        
         post_sample_repulsive_gauss!(X, Mu, Sig, C, config, prior) 
 
         set_description(pbar, f"log-likelihood: {llhd:.3f}")
@@ -64,7 +66,7 @@ end
     lp = Vector()
     lc = Vector()
     llhd = 0.  
-    @inbounds for i = 1:n  
+    @inbounds for i = 1:n 
         x = X[:, i] 
 
         C_, Mu_, Sig_, ℓ = sample_K_and_swap_indices(
@@ -322,20 +324,25 @@ end
 # Code for sampling using a Normal-Inverse-Wishart prior.
 #
 
-@inline sample_gauss(g_prior::EigBoundedNorInverseWishart) = rand(g_prior) 
+# @inline sample_gauss(g_prior::EigBoundedNorInverseWishart) = rand(g_prior) 
 
 
 @inline function sample_repulsive_gauss!(X, Mu, Sig, ℓ, config, g_prior)
     g₀ = config["g₀"]  
     K = size(Mu, 2)
-
+    μ, Σ = nothing, nothing 
     min_d = 0.     # min wasserstein distance 
     while rand() > min_d   
         @inbounds for k in ℓ+1:K 
-            μ, Σ = sample_gauss(g_prior)
+            try
+                μ, Σ = sample_gauss(g_prior)
+            catch LoadError
+                println(g_prior)
+                throw("oh")
+            end 
             Mu[:, k] .= μ
             Sig[:, :, k] .= Σ 
         end 
-        min_d = min_wass_distance(Mu, Sig, g₀)
+        min_d = min_wass_distance(Mu, Sig, g₀) 
     end 
 end 

@@ -1,8 +1,6 @@
 module WassersteinBayesRepulsiveGMM
 
 export wrbgmm_blocked_gibbs, EigBoundedNorInverseWishart
-
-import Base.rand
  
 using Distributions 
 using FStrings

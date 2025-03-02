@@ -1,8 +1,7 @@
 using CSV
 using DataFrames
 using Distributions
-using LinearAlgebra 
-using PDMats
+using LinearAlgebra  
 using Plots, StatsPlots
 using Random 
 using StatsBase
@@ -19,8 +18,8 @@ function main()
     data = CSV.File("./data/faithful_data.csv") |> DataFrame 
     X = Matrix(data[:, 2:3]) |> transpose  	 
 
-    dim = size(X, 1) 	
-    g₀ = 10
+    dim = size(X, 1) 
+    g₀ = 0.1
     β = 1.
     τ = 0.1
     a₀ = 1.
@@ -30,7 +29,7 @@ function main()
     K = 5
 
     prior = EigBoundedNorInverseWishart(
-        l_σ2, u_σ2, 5, zeros(dim), 2, 0.01I(dim))
+        l_σ2, u_σ2, 1, zeros(dim), 2, I(dim))
 
     C_mc, Mu_mc, Sigma_mc, K_mc, llhd_mc = wrbgmm_blocked_gibbs(
         X; g₀=g₀, K=K, β=β, τ=τ, a₀=a₀, b₀=b₀, prior=prior, 
