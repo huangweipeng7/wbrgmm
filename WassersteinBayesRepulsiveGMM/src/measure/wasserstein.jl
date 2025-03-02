@@ -56,7 +56,7 @@ end
     Threads.@threads for (i, j) in Tuple.(indices)
         @inbounds d = wass_gauss(
             Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])  
-        hₖ = min(hₖ, d/(d+g₀))
+        hₖ = min(hₖ, d/(d+g₀)) 
     end  
     return hₖ
 end 

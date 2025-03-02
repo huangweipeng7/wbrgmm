@@ -9,25 +9,51 @@ end
 
 EigBoundedNorInverseWishart(l_σ2, u_σ2, κ₀, μ₀, ν₀, Φ₀) =
     EigBoundedNorInverseWishart(
-        l_σ2, u_σ2, κ₀, μ₀, InverseWishart(ν₀, PDMat(Φ₀))) 
+        l_σ2, u_σ2, κ₀, μ₀, InverseWishart(ν₀, round.(Φ₀, digits=10) |> PDMat)) 
 
 
 # logpdf(niw::EigBoundedNorInverseWishart, μ, Σ) = 
 #     logpdf(MvNormal(niw.μ₀, Σ/niw.κ₀), μ) + logpdf(niw.iw, Σ)
 
 
+# @inline function sample_gauss(niw::EigBoundedNorInverseWishart)  
+#     Σ = rand(niw.iw)
+#     eig_v_Σ = eigvals(Σ) 
+
+#     l_σ2, u_σ2 = niw.l_σ2, niw.u_σ2
+#     count = 0
+#     while first(eig_v_Σ) < l_σ2 || last(eig_v_Σ) > u_σ2 
+#         Σ .= rand(niw.iw)      
+#         eig_v_Σ = eigvals(Σ)
+
+#         count += 1
+#         count <= 2000 ||
+#             throw("Sampling from the prior takes too long. 
+#                    Check if the bounds are set properly")
+#     end 
+    
+#     μ = MvNormal(niw.μ₀, Σ./niw.κ₀) |> rand   
+#     return μ, Σ
+# end 
+
+
 @inline function sample_gauss(niw::EigBoundedNorInverseWishart)  
-    Σ = rand(niw.iw)      
-    eig_v_Σ = eigvals(Σ)
+    dim = length(niw.μ₀)
+    max_cnt = 2000
+    
+    Σ = zeros(dim, dim)
+    eig_v_Σ = nothing 
 
-    count = 0
-    while first(eig_v_Σ) < niw.l_σ2 || last(eig_v_Σ) > niw.u_σ2 
-        Σ[:, :] .= rand(niw.iw)      
+    l_σ2, u_σ2 = niw.l_σ2, niw.u_σ2
+    @inbounds for c = 1:max_cnt 
+        Σ .= rand(niw.iw)      
         eig_v_Σ = eigvals(Σ)
-
-        count += 1
-        count <= 2000 ||
-            throw("Sampling from the prior takes too long. Check if the bounds are set properly")
+         
+        (first(eig_v_Σ) < l_σ2 || last(eig_v_Σ) > u_σ2) || break  
+        
+        c < max_cnt ||
+            throw("Sampling from the prior takes too long. 
+                   Check if the bounds are set properly")
     end 
     
     μ = MvNormal(niw.μ₀, Σ./niw.κ₀) |> rand   

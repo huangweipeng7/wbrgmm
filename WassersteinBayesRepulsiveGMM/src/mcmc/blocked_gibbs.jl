@@ -334,12 +334,7 @@ end
     min_d = 0.     # min wasserstein distance 
     while rand() > min_d   
         @inbounds for k in ℓ+1:K 
-            try
-                μ, Σ = sample_gauss(g_prior)
-            catch LoadError
-                println(g_prior)
-                throw("oh")
-            end 
+            μ, Σ = sample_gauss(g_prior)
             Mu[:, k] .= μ
             Sig[:, :, k] .= Σ 
         end 
