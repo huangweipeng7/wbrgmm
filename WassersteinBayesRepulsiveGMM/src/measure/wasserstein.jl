@@ -3,8 +3,8 @@
 @inline sum_sq(x) = sum(@turbo x.^2) 
 
 
-@inline wass_gauss(μ₁, Σ₁, μ₂, Σ₂) = (μ₁ .- μ₂) .^ 2 |> sum |> sqrt
-    # sqrt(sum_sq(μ₁ .- μ₂) + sum_sq(sqrt(Σ₁) .- sqrt(Σ₂)))  
+@inline wass_gauss(μ₁, Σ₁, μ₂, Σ₂) = #(μ₁ .- μ₂) .^ 2 |> sum |> sqrt
+    sqrt(sum_sq(μ₁ .- μ₂) + sum_sq(sqrt(Σ₁) .- sqrt(Σ₂)))  
 
 
 @inline function min_wass_distance(Mu, Sig, g₀)
@@ -20,8 +20,8 @@ end
 
     K = size(Mu, 2)   
     hₖ = 1.
-    for i in 1:K-1, j in i+1:K
-        @inbounds d = wass_gauss(
+    @inbounds for i in 1:K-1, j in i+1:K
+        d = wass_gauss(
             Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])
         hₖ = min(hₖ, d/(d+g₀)) 
     end   
@@ -36,8 +36,8 @@ end
     K = size(Mu, 2)   
     loghₖ = 0.
     count = 0.5K * (K-1) 
-    for i in 1:K-1, j in i+1:K
-        @inbounds d = wass_gauss(
+    @inbounds for i in 1:K-1, j in i+1:K
+        d = wass_gauss(
             Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])   
         loghₖ += log(d) - log(d + g₀)
     end   

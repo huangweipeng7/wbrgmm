@@ -305,17 +305,18 @@ end
     # observation according to their max log-likelihoods
     log_i_k(i, k) = logpdf(MvNormal(Mu[:, k], Sig[:, :, k]), X[:, i])
  
-    if Threads.nthreads() > 1
-        Threads.@threads for i in eachindex(C)
-            # Make sure that the last cluster is not assigned anything
-            C[i] = log_i_k.(Ref(i), 1:K-1) |> argmax
-        end
-    else     
-        for i in eachindex(C)
-            # Make sure that the last cluster is not assigned anything
-            C[i] = log_i_k.(Ref(i), 1:K-1) |> argmax
-        end
-    end 
+    C .= sample(1:K-1, length(C), replace=true)
+    # if Threads.nthreads() > 1
+    #     Threads.@threads for i in eachindex(C)
+    #         # Make sure that the last cluster is not assigned anything
+    #         C[i] = log_i_k.(Ref(i), 1:K-1) |> argmax
+    #     end
+    # else     
+    #     for i in eachindex(C)
+    #         # Make sure that the last cluster is not assigned anything
+    #         C[i] = log_i_k.(Ref(i), 1:K-1) |> argmax
+    #     end
+    # end 
 end 
  
 

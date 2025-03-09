@@ -1,15 +1,16 @@
 mutable struct EigBoundedNorInverseWishart
     l_σ2::Float64
     u_σ2::Float64
-    κ₀::Float64
+    τ::Float64
     μ₀::Vector{Float64} 
+    Σ₀::Union{Matrix, Diagonal}
     iw::InverseWishart 
 end 
 
 
-EigBoundedNorInverseWishart(l_σ2, u_σ2, κ₀, μ₀, ν₀, Φ₀) =
+EigBoundedNorInverseWishart(l_σ2, u_σ2, τ, μ₀, Σ₀, ν₀, Φ₀) =
     EigBoundedNorInverseWishart(
-        l_σ2, u_σ2, κ₀, μ₀, InverseWishart(ν₀, round.(Φ₀, digits=10) |> PDMat)) 
+        l_σ2, u_σ2, τ, μ₀, Σ₀, InverseWishart(ν₀, round.(Φ₀, digits=10) |> PDMat)) 
 
 
 # logpdf(niw::EigBoundedNorInverseWishart, μ, Σ) = 
@@ -56,19 +57,8 @@ EigBoundedNorInverseWishart(l_σ2, u_σ2, κ₀, μ₀, ν₀, Φ₀) =
                    Check if the bounds are set properly")
     end 
     
-    μ = MvNormal(niw.μ₀, Σ./niw.κ₀) |> rand   
+    μ = MvNormal(niw.μ₀, niw.Σ₀) |> rand   
     return μ, Σ
-end 
-
-
-function reset!(
-    niw::EigBoundedNorInverseWishart, 
-    κ₀::Float64, μ₀::AbstractArray,
-    ν₀::Float64, Φ₀::AbstractArray)
-
-    niw.κ₀ = κ₀
-    niw.μ₀ .= μ₀ 
-    niw.iw = InverseWishart(ν₀, Φ₀)
 end 
 
 
@@ -81,7 +71,7 @@ end
         
         μ, Σ = n == 0 ? 
             sample_gauss(g_prior) : 
-            post_sample_gauss(Xₖ, g_prior)
+            post_sample_gauss(Xₖ, Mu[:, :, k], Sig[:, :, k], g_prior)
         
         Mu[:, k] .= μ[:] 
         Sig[:, :, k] .= Σ[:, :]
@@ -89,44 +79,24 @@ end
 end 
 
 
-@inline function post_sample_gauss(X, niw::EigBoundedNorInverseWishart)
+@inline function post_sample_gauss(X, μ, Σ, niw::EigBoundedNorInverseWishart)
     # An inner function for computing the covariance
     cov2(X) = cov(X; dims=2, corrected=false)
 
     dim, n = size(X)
+    τ = niw.τ
   
     x̄ = mean(X; dims=2)
-    κₙ = niw.κ₀ + n  
-    μₙ = vec(niw.κ₀ * niw.μ₀ + n * x̄) / κₙ  
+
+    Σ₀ = inv(τ^2 * I + n * inv(Σ))
+    Σ₀ = round.(Σ₀, digits=10)
+    μ₀ = Σ₀ * (n * inv(Σ) * x̄) |> vec 
+
     νₙ = niw.iw.df + n 
-    Φₙ = Matrix(niw.iw.Ψ) + cov2(X) * n + (niw.κ₀ * n / κₙ) * 
-        (x̄ - niw.μ₀) * transpose(x̄ - niw.μ₀)    
+    Φₙ = Matrix(niw.iw.Ψ) + cov2(X) * n 
     Φₙ .= round.(Φₙ, digits=10)
 
-    niw_p = EigBoundedNorInverseWishart(niw.l_σ2, niw.u_σ2, κₙ, μₙ, νₙ, Φₙ)
-    μ, Σ = sample_gauss(niw_p)
-    # count = 0
-    # # Numerical instability will fail the hermitain check
-    # iw = InverseWishart(νₙ, round.(Φₙ, digits=10))  
-    # Σ = rand(iw)      
-    # eig_v_Σ = eigvals(Σ)
-
-    # while first(eig_v_Σ) < niw.l_σ2 || last(eig_v_Σ) > niw.u_σ2  
-    #     Σ[:, :] .= rand(iw)      
-    #     eig_v_Σ = eigvals(Σ)
-
-    #     count += 1
-
-    #     count <= 1000 || 
-    #         throw("Posterior sampling of the kernels takes too long.")
-    # end 
-    # μ = MvNormal(μₙ, Φₙ/κₙ) |> rand 
-
-    # ν = νₙ - dim + 1
-    # μ = MvTDist(ν, μₙ, Φₙ/(κₙ*ν)) |> rand 
-
-    # println(iw)
-    # println(μ, " ", Σ)
-    # println(x̄, " ", cov2(X), "\n")
+    niw_p = EigBoundedNorInverseWishart(niw.l_σ2, niw.u_σ2, τ, μ₀, Σ₀, νₙ, Φₙ)
+    μ, Σ = sample_gauss(niw_p) 
     return μ, Σ
 end 

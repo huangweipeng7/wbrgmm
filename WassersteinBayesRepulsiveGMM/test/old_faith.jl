@@ -32,7 +32,7 @@ function main()
     # κ₀ = 1
     # ν₀ = 2
 
-    g₀ = 10
+    g₀ = 20
     β = 15.
     τ = 0.1
     a₀ = 1.
@@ -55,7 +55,7 @@ function main()
     # ν₀ = 2
 
     prior = EigBoundedNorInverseWishart(
-        l_σ2, u_σ2, κ₀, zeros(Real, dim), ν₀, τ^2*I(dim))
+        l_σ2, u_σ2, τ, zeros(Real, dim), τ^2*I(dim), ν₀, I(dim))
 
     C_mc, Mu_mc, Sigma_mc, K_mc, llhd_mc = wrbgmm_blocked_gibbs(
         X; g₀=g₀, K=K, β=β, τ=τ, a₀=a₀, b₀=b₀, prior=prior, 
