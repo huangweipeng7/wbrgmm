@@ -18,7 +18,7 @@ function main()
 	X = Matrix(data[:, 1:2]) |> transpose 
 	dim = size(X, 1) 	
 
-	g₀ = 1
+	g₀ = 0.1
 	β = 15.
 	τ = 0.1
 	a₀ = 1.
@@ -26,11 +26,11 @@ function main()
     l_σ2 = 1e-6
     u_σ2 = 1e6
     K = 5
-    κ₀ = 5
-    ν₀ = 10
+    κ₀ = 1
+    ν₀ = 3
 
     prior = EigBoundedNorInverseWishart(
-        l_σ2, u_σ2, κ₀, zeros(Real, dim), ν₀, τ^2*I(dim))
+        l_σ2, u_σ2, τ, zeros(Real, dim), τ^2*I(dim), ν₀, I(dim))
 
     C_mc, Mu_mc, Sigma_mc, K_mc, llhd_mc = wrbgmm_blocked_gibbs(
         X; g₀=g₀, K=K, β=β, τ=τ, a₀=a₀, b₀=b₀, prior=prior, 
@@ -45,8 +45,11 @@ function main()
     K_df = DataFrame(K_mc', :auto)
     CSV.write("results/joensuu/K_mc.csv", K_df) 
     
-    plots = [
+    @inbounds plots = [
         begin
+            println("Drawing the MCMC sample $(i+1)")
+            println("The unique classes are $(unique(C_mc[end-i]))")
+
             p = scatter(
                 data[:, 1], data[:, 2], 
                 legend=:none,    

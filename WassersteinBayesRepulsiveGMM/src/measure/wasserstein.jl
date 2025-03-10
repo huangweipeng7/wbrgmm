@@ -3,8 +3,8 @@
 @inline sum_sq(x) = sum(@turbo x.^2) 
 
 
-@inline wass_gauss(μ₁, Σ₁, μ₂, Σ₂) = #(μ₁ .- μ₂) .^ 2 |> sum |> sqrt
-    sqrt(sum_sq(μ₁ .- μ₂) + sum_sq(sqrt(Σ₁) .- sqrt(Σ₂)))  
+@inline wass_gauss(μ₁, Σ₁, μ₂, Σ₂) = (μ₁ .- μ₂) .^ 2 |> sum |> sqrt
+    # sqrt(sum_sq(μ₁ .- μ₂) + sum_sq(sqrt(Σ₁) .- sqrt(Σ₂)))  
 
 
 @inline function min_wass_distance(Mu, Sig, g₀)
@@ -23,7 +23,7 @@ end
     @inbounds for i in 1:K-1, j in i+1:K
         d = wass_gauss(
             Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])
-        hₖ = min(hₖ, d/(d+g₀)) 
+        hₖ = min(hₖ, d / (d + g₀)) 
     end   
     return hₖ
 end 
@@ -41,7 +41,7 @@ end
             Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])   
         loghₖ += log(d) - log(d + g₀)
     end   
-    hₖ = exp(loghₖ/count)
+    hₖ = exp(loghₖ / count)
     return hₖ
 end 
 
@@ -56,7 +56,7 @@ end
     Threads.@threads for (i, j) in Tuple.(indices)
         @inbounds d = wass_gauss(
             Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])  
-        hₖ = min(hₖ, d/(d+g₀)) 
+        hₖ = min(hₖ, d / (d + g₀)) 
     end  
     return hₖ
 end 

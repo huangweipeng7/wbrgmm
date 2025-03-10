@@ -38,19 +38,20 @@ EigBoundedNorInverseWishart(l_σ2, u_σ2, τ, μ₀, Σ₀, ν₀, Φ₀) =
 # end 
 
 
-@inline function sample_gauss(niw::EigBoundedNorInverseWishart)  
-    dim = length(niw.μ₀)
-    max_cnt = 2000
+@inline function sample_gauss(
+    niw::EigBoundedNorInverseWishart; max_cnt=2000)  
+    dim = length(niw.μ₀) 
     
     Σ = zeros(dim, dim)
     eig_v_Σ = nothing 
 
     l_σ2, u_σ2 = niw.l_σ2, niw.u_σ2
     @inbounds for c = 1:max_cnt 
-        Σ .= rand(niw.iw)      
+        Σ .= rand(niw.iw) 
+        Σ = round.(Σ, digits=10)    
         eig_v_Σ = eigvals(Σ)
-         
-        (first(eig_v_Σ) < l_σ2 || last(eig_v_Σ) > u_σ2) || break  
+        
+        (first(eig_v_Σ) > l_σ2 && last(eig_v_Σ) < u_σ2) && break  
         
         c < max_cnt ||
             throw("Sampling from the prior takes too long. 
@@ -62,7 +63,9 @@ EigBoundedNorInverseWishart(l_σ2, u_σ2, τ, μ₀, Σ₀, ν₀, Φ₀) =
 end 
 
 
-@inline function post_sample_gauss!(X, Mu, Sig, C, g_prior::EigBoundedNorInverseWishart)
+@inline function post_sample_gauss!(
+    X, Mu, Sig, C, g_prior::EigBoundedNorInverseWishart)
+
     K = size(Mu, 2)
 
     @inbounds for k in 1:K
@@ -81,6 +84,7 @@ end
 
 @inline function post_sample_gauss(X, μ, Σ, niw::EigBoundedNorInverseWishart)
     # An inner function for computing the covariance
+    # μ is currently not in use
     cov2(X) = cov(X; dims=2, corrected=false)
 
     dim, n = size(X)

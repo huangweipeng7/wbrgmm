@@ -81,11 +81,7 @@ end
         Kp1 = size(Mu_, 2)  
 
         sample_repulsive_gauss!(X, Mu_, Sig_, ℓ, config, prior)
-
-        # @inbounds for k = 1:Kp1
-        #     @assert all(diag(Sig_[:, :, k]) .> 0) Sig_[:, :, k]
-        # end  
-        
+ 
         # resize the vectors for loglikelihood of data and the corresponding coefficients
         resize!(lp, Kp1) 
         resize!(lc, Kp1) 
@@ -165,93 +161,7 @@ end
 
 @inline post_sample_K(log_p_K, Ẑ, Zₖ, ℓ, t_max) = 
     ℓ + gumbel_max_sample(log_p_K .+ Ẑ .- Zₖ[ℓ:ℓ+t_max-1]) - 1
-
-
-# @inline function post_sample_gauss!(X, Mu, Sig, C, config) 
-#     K = size(Mu, 2)   
-#     @inbounds for k = 1:K
-#         Xₖ = X[:, C .== k]
-
-#         μ, Σ = size(Xₖ, 2) == 0 ? 
-#             sample_gauss(config) : 
-#             post_sample_gauss(Xₖ, Mu[:, k], Sig[:, :, k], config)
-
-#         Mu[:, k] .= μ
-#         Sig[:, :, k] .= Σ
-#     end 
-# end 
-
-
-# @inline function post_sample_gauss(X, μ, Σ, config) 
-#     a₀ = config["a₀"] 
-#     b₀ = config["b₀"]
-#     τ = config["τ"]
-
-#     x_sum = sum(X; dims=2)  
-
-#     n = size(X, 2)
-
-#     invΣ = inv(Σ)
-#     Σ₀ = inv(τ^2 * I + n * invΣ)
-#     μ₀ = Σ₀ * (invΣ * x_sum) 
-#     μ .= MvNormal(μ₀|> vec, Σ₀) |> rand
-
-#     aₖ = a₀ + n / 2. 
-#     bₖ = b₀ .+ sum((X .- μ).^2; dims=2) / 2. |> vec
-#     Σ .= rand_inv_gamma(aₖ, bₖ, config)
-#     return μ, Σ
-# end  
-
-
-# function post_sample_gauss_kernels_mc(
-#     X, ℓ, t_max, Mu, Sig, C, config; n_mc=20) 
-    
-#     g₀ = config["g₀"] 
-#     a₀ = config["a₀"] 
-#     b₀ = config["b₀"]
-#     τ = config["τ"]
-
-#     dim = size(Mu, 1)  
-#     K = ℓ + t_max - 1
-#     Mu_mc = zeros(dim, K, n_mc)
-#     Sig_mc = zeros(dim, dim, K, n_mc)
-    
-#     normal = MvNormal(zeros(dim), τ^2) 
-#     @inbounds for k in 1:K
-#         X_tmp = X[:, C.==k] 
-#         n = size(X_tmp, 2) 
-
-#         if n == 0 
-#             Mu_mc[:, k, :] .= rand(normal, n_mc)
-#             Sig_mc[:, :, k, :] .= rand_inv_gamma_mc(a₀, b₀, n_mc, config)
-#         else
-#             x_sum = sum(X_tmp; dims=2)  
-#             Σ₀ = inv(τ^2*I + n * inv(Sig[:, :, k]))
-#             μ₀ = Σ₀ * (inv(Sig[:, :, k]) * x_sum) 
-#             Mu_mc[:, k, :] .= rand(MvNormal(μ₀ |> vec, Σ₀), n_mc)
-
-#             aₖ = a₀ + n / 2. 
-#             bₖ = b₀ .+ sum((X_tmp .- Mu[:, k]).^2; dims=2) / 2. |> vec
-#             Sig_mc[:, :, k, :] .= rand_inv_gamma_mc(aₖ, bₖ, n_mc, config) 
-#         end  
-#     end 
-#     return Mu_mc, Sig_mc
-# end 
-
-
-# @inline function post_sample_repulsive_gauss!(X, Mu, Sig, C, config)
-#     min_d = 0.              # min wasserstein distance
-#     reject_counts = 0 
-
-#     g₀ = config["g₀"]
-#     while rand() > min_d 
-#         reject_counts += 1 
-#         post_sample_gauss!(X, Mu, Sig, C, config)
-#         min_d = min_wass_distance(Mu, Sig, g₀)
-#     end
-#     return reject_counts 
-# end 
-
+ 
 
 @inline function post_sample_repulsive_gauss!(X, Mu, Sig, C, config, g_prior)
     min_d = 0.              # min wasserstein distance
@@ -305,29 +215,21 @@ end
     # observation according to their max log-likelihoods
     log_i_k(i, k) = logpdf(MvNormal(Mu[:, k], Sig[:, :, k]), X[:, i])
  
-    C .= sample(1:K-1, length(C), replace=true)
-    # if Threads.nthreads() > 1
-    #     Threads.@threads for i in eachindex(C)
-    #         # Make sure that the last cluster is not assigned anything
-    #         C[i] = log_i_k.(Ref(i), 1:K-1) |> argmax
-    #     end
-    # else     
-    #     for i in eachindex(C)
-    #         # Make sure that the last cluster is not assigned anything
-    #         C[i] = log_i_k.(Ref(i), 1:K-1) |> argmax
-    #     end
-    # end 
+    # C .= sample(1:K-1, length(C), replace=true)
+    if Threads.nthreads() > 1
+        Threads.@threads for i in eachindex(C)
+            # Make sure that the last cluster is not assigned anything
+            C[i] = log_i_k.(Ref(i), 1:K-1) |> argmax
+        end
+    else     
+        for i in eachindex(C)
+            # Make sure that the last cluster is not assigned anything
+            C[i] = log_i_k.(Ref(i), 1:K-1) |> argmax
+        end
+    end 
 end 
  
-
-
-#
-# Code for sampling using a Normal-Inverse-Wishart prior.
-#
-
-# @inline sample_gauss(g_prior::EigBoundedNorInverseWishart) = rand(g_prior) 
-
-
+ 
 @inline function sample_repulsive_gauss!(X, Mu, Sig, ℓ, config, g_prior)
     g₀ = config["g₀"]  
     K = size(Mu, 2)
