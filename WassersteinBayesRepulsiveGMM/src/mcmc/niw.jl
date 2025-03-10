@@ -38,7 +38,7 @@ EigBoundedNorInverseWishart(l_σ2, u_σ2, τ, μ₀, Σ₀, ν₀, Φ₀) =
 # end 
 
 
-@inline function sample_gauss(
+@inline function sample_iw(
     niw::EigBoundedNorInverseWishart; max_cnt=2000)  
     dim = length(niw.μ₀) 
     
@@ -48,7 +48,7 @@ EigBoundedNorInverseWishart(l_σ2, u_σ2, τ, μ₀, Σ₀, ν₀, Φ₀) =
     l_σ2, u_σ2 = niw.l_σ2, niw.u_σ2
     @inbounds for c = 1:max_cnt 
         Σ .= rand(niw.iw) 
-        Σ = round.(Σ, digits=10)    
+        Σ .= round.(Σ, digits=10)    
         eig_v_Σ = eigvals(Σ)
         
         (first(eig_v_Σ) > l_σ2 && last(eig_v_Σ) < u_σ2) && break  
@@ -56,8 +56,14 @@ EigBoundedNorInverseWishart(l_σ2, u_σ2, τ, μ₀, Σ₀, ν₀, Φ₀) =
         c < max_cnt ||
             throw("Sampling from the prior takes too long. 
                    Check if the bounds are set properly")
-    end 
-    
+    end  
+    return Σ
+end 
+
+@inline function sample_gauss(
+    niw::EigBoundedNorInverseWishart; max_cnt=2000)  
+    dim = length(niw.μ₀) 
+    Σ = sample_iw(niw)
     μ = MvNormal(niw.μ₀, niw.Σ₀) |> rand   
     return μ, Σ
 end 
@@ -92,15 +98,15 @@ end
   
     x̄ = mean(X; dims=2)
 
-    Σ₀ = inv(τ^2 * I + n * inv(Σ))
-    Σ₀ = round.(Σ₀, digits=10)
-    μ₀ = Σ₀ * (n * inv(Σ) * x̄) |> vec 
-
     νₙ = niw.iw.df + n 
     Φₙ = Matrix(niw.iw.Ψ) + cov2(X) * n 
     Φₙ .= round.(Φₙ, digits=10)
+    niw_p = EigBoundedNorInverseWishart(niw.l_σ2, niw.u_σ2, τ, niw.μ₀, niw.Σ₀, νₙ, Φₙ)
+    Σ = sample_iw(niw_p)
 
-    niw_p = EigBoundedNorInverseWishart(niw.l_σ2, niw.u_σ2, τ, μ₀, Σ₀, νₙ, Φₙ)
-    μ, Σ = sample_gauss(niw_p) 
+    Σ₀ = inv(τ^2 * I + n * inv(Σ))
+    Σ₀ = round.(Σ₀, digits=10)
+    μ₀ = Σ₀ * (n * inv(Σ) * x̄) |> vec 
+    μ = MvNormal(μ₀, Σ₀) |> rand 
     return μ, Σ
 end 

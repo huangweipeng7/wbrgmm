@@ -3,8 +3,8 @@
 @inline sum_sq(x) = sum(@turbo x.^2) 
 
 
-@inline wass_gauss(μ₁, Σ₁, μ₂, Σ₂) = (μ₁ .- μ₂) .^ 2 |> sum |> sqrt
-    # sqrt(sum_sq(μ₁ .- μ₂) + sum_sq(sqrt(Σ₁) .- sqrt(Σ₂)))  
+@inline wass_gauss(μ₁, Σ₁, μ₂, Σ₂) = #(μ₁ .- μ₂) .^ 2 |> sum |> sqrt
+    sqrt(sum_sq(μ₁ .- μ₂) + sum_sq(sqrt(Σ₁) .- sqrt(Σ₂)))  
 
 
 @inline function min_wass_distance(Mu, Sig, g₀)

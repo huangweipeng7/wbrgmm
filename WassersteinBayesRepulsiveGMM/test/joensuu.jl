@@ -54,7 +54,7 @@ function main()
                 data[:, 1], data[:, 2], 
                 legend=:none,    
                 marker_z=C_mc[end-i],  
-                markersize=2.5,
+                markersize=3,
                 m=:+,
                 title="MCMC Sample $(i+1)",
                 alpha=0.8)
