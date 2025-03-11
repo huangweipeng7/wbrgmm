@@ -1,28 +1,34 @@
-@inline function logV_nt(n, t_max) 
-    log_V = zeros(t_max)
+@inline function logV_nt(n, β, K; λ=1) 
+    log_V = zeros(K)
     tol = 1e-9 
-
-    log_exp_m_1 = log(exp(1) - 1)
-    @inbounds for t = 1:t_max
+ 
+    log_pk(k) = k * log(λ) - log(exp(λ) - 1) - logfactorial(k) 
+    @inbounds for t = 1:K
         log_V[t] = -Inf
         if t <= n 
             a, c, k, p = 0, -Inf, 1, 0
             while abs(a - c) > tol || p < 1.0 - tol
                 # Note: The first condition is false when a = c = -Inf
                 if k >= t
-                    a = c 
-                    # b = loggamma(k + 1) - loggamma(k - t + 1) - loggamma(k + n)  
-                    # b += loggamma(k) - log_exp_m_1 - logfactorial(k) 
-                    b = - loggamma(k - t + 1) - loggamma(k + n)  
-                    b += loggamma(k) - log_exp_m_1  
-                    m = max(a, b)
-                    c = m == -Inf ? -Inf : m + log(exp(a - m) + exp(b - m))
+                    a = c  
+                    b = logfactorial(k) - logfactorial(k - t) 
+                    b += - logfactorial(β*k + n - 1) + logfactorial(β*k - 1) 
+                    b += log_pk(k)
+                    c = logsumexp(a, b) 
                 end
-                p += exp(-log_exp_m_1 - logfactorial(k))
+                p += exp(log_pk(k))
                 k += 1 
             end
             log_V[t] = c
         end 
     end
+    println(log_V)
     return log_V
 end
+ 
+
+logsumexp(a, b) = begin
+    m = max(a, b)
+    m == -Inf ? -Inf : log(exp(a-m) + exp(b-m)) + m
+end 
+ 

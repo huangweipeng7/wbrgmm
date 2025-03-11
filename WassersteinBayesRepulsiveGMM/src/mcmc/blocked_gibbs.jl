@@ -23,8 +23,8 @@
     Sig = zeros(dim, dim, K+1)
     initialize!(X, Mu, Sig, C, config, prior)  
 
-    logV = logV_nt(n, t_max)
-    Zₖ = numerical_Zₖ(2K, dim, config)
+    logV = logV_nt(n, β, 2K)
+    Zₖ = numerical_Zₖ(2K, dim, config, prior)
     
     pbar = ProgressBar(1:(burnin+runs))
     @inbounds for iter in pbar #1:(burnin+runs)
@@ -66,8 +66,8 @@ end
     lp = Vector()
     lc = Vector()
     llhd = 0.  
-    @inbounds for i = 1:n 
-        x = X[:, i] 
+    for i = 1:n 
+       @inbounds x = X[:, i] 
 
         C_, Mu_, Sig_, ℓ = sample_K_and_swap_indices(
             i, n, C, Mu, Sig, t_max; exclude_i=true)

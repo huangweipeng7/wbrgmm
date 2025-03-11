@@ -32,7 +32,7 @@ function main()
     prior = EigBoundedNorInverseWishart(
         l_σ2, u_σ2, τ, zeros(Real, dim), τ^2*I(dim), ν₀, I(dim))
 
-    C_mc, Mu_mc, Sigma_mc, K_mc, llhd_mc = wrbgmm_blocked_gibbs(
+    C_mc, Mu_mc, Sig_mc, K_mc, llhd_mc = wrbgmm_blocked_gibbs(
         X; g₀=g₀, K=K, β=β, τ=τ, a₀=a₀, b₀=b₀, prior=prior, 
         l_σ2=l_σ2, u_σ2=u_σ2, burnin=100, runs=300, thinning=1) 
 
@@ -61,7 +61,7 @@ function main()
 
             for k in unique(C_mc[end-i])
                 covellipse!(
-                    Mu_mc[end-i][:, k], Sigma_mc[end-i][:, :, k], 
+                    Mu_mc[end-i][:, k], Sig_mc[end-i][:, :, k], 
                     alpha=0.2, label=[k])
             end
             p 

@@ -1,5 +1,5 @@
 # Numerical Computation of ZK as in algorithm 1
-@inline function numerical_Zₖ(K_max, dim, config; n_mc = 100)
+@inline function numerical_Zₖ(K_max, dim, config, prior; n_mc = 100)
     g₀ = config["g₀"]
     a₀ = config["a₀"]
     b₀ = config["b₀"]
@@ -11,7 +11,7 @@
     @inbounds μ_mc[:, :, :] .= randn((dim, K_max, n_mc)) * τ
     
     @inbounds for n = 1:n_mc, k = 1:K_max
-        Σ_mc[:, :, k, n] .= rand_inv_gamma(a₀, b₀, config)
+        Σ_mc[:, :, k, n] .= sample_iw(prior)
     end 
 
     gg = zeros(K_max, n_mc) 
