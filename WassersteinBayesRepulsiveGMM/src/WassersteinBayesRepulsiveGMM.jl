@@ -1,6 +1,6 @@
 module WassersteinBayesRepulsiveGMM
 
-export wrbgmm_blocked_gibbs, EigBoundedNorInverseWishart
+export wrbgmm_blocked_gibbs, KernelPrior
  
 using Distributions 
 using FStrings
@@ -13,13 +13,15 @@ using SpecialFunctions
 using Statistics
 using StatsBase 
 
+import Base.rand 
+
 include("log_p_K.jl")
 include("logV.jl")
 include("numerical_Zk.jl")
 include("numerical_Zhat.jl")
 
 include("measure/wasserstein.jl")
-include("mcmc/niw.jl")
+include("mcmc/kernel_prior.jl")
 include("mcmc/blocked_gibbs.jl")
 include("mcmc/prior_sampler.jl")
 

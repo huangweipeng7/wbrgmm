@@ -163,14 +163,14 @@ end
     ℓ + gumbel_max_sample(log_p_K .+ Ẑ .- Zₖ[ℓ:ℓ+t_max-1]) - 1
  
 
-@inline function post_sample_repulsive_gauss!(X, Mu, Sig, C, config, g_prior)
+@inline function post_sample_repulsive_gauss!(X, Mu, Sig, C, config, k_prior)
     min_d = 0.              # min wasserstein distance
     reject_counts = 0 
 
     g₀ = config["g₀"]
     while rand() > min_d 
         reject_counts += 1 
-        post_sample_gauss!(X, Mu, Sig, C, g_prior)
+        post_sample_gauss!(X, Mu, Sig, C, k_prior)
         min_d = min_wass_distance(Mu, Sig, g₀)
     end
     return reject_counts 
@@ -230,14 +230,14 @@ end
 end 
  
  
-@inline function sample_repulsive_gauss!(X, Mu, Sig, ℓ, config, g_prior)
+@inline function sample_repulsive_gauss!(X, Mu, Sig, ℓ, config, k_prior)
     g₀ = config["g₀"]  
     K = size(Mu, 2)
     μ, Σ = nothing, nothing 
     min_d = 0.     # min wasserstein distance 
     while rand() > min_d   
         @inbounds for k in ℓ+1:K 
-            μ, Σ = sample_gauss(g_prior)
+            μ, Σ = rand(k_prior)
             Mu[:, k] .= μ
             Sig[:, :, k] .= Σ 
         end 

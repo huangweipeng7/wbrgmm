@@ -22,7 +22,7 @@ function main()
     dim = size(X, 1) 
     
     # Interesting hyper settings 
-    g₀ = 20
+    g₀ = 50
     β = 1
     τ = 0.1 
     l_σ2 = 1e-6
@@ -30,8 +30,8 @@ function main()
     K = 5 
     ν₀ = 10 
 
-    prior = EigBoundedNorInverseWishart(
-        l_σ2, u_σ2, τ, zeros(Real, dim), τ^2*I(dim), ν₀, I(dim))
+    prior = KernelPrior(
+        τ, zeros(Real, dim), τ^2*I(dim), l_σ2, u_σ2, ν₀, I(dim))
 
     C_mc, Mu_mc, Sig_mc, K_mc, llhd_mc = wrbgmm_blocked_gibbs(
         X; g₀=g₀, K=K, β=β, τ=τ, prior=prior, t_max=5,
@@ -94,7 +94,7 @@ function main()
     # draw(PDF("test_wass.pdf", 13inch, 3inch), p)
 
     p = plot_density_estimate(X, C_mc, Mu_mc, Sig_mc)
-    savefig(p, "test_mean.pdf") 
+    savefig(p, "test_wass.pdf") 
 end 
 
 
@@ -135,7 +135,7 @@ function plot_density_estimate(X, C_mc, Mu_mc, Sig_mc)
         color=:black, alpha=0.75, markersize=2, label="Data")
     contour!(x_grid, y_grid, density_matrix, 
         levels=30, c=:viridis, linewidth=1, alpha=0.7)
-    title!("Density Estimate by Mean Repulsion")
+    title!("Density Estimate by Wass Repulsion")
     xlabel!("X"); ylabel!("Y")
     p 
 end 
