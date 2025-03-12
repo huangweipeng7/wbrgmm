@@ -2,7 +2,7 @@
     X; g₀ = 100., β = 1., 
     a₀ = 1., b₀ = 1., τ = 1.,
     l_σ2 = 0.001, u_σ2 = 10000.,   
-    prior = nothing,
+    prior = nothing, method="wasserstein",
     K = 5, t_max = 2, burnin = 2000, runs = 3000, thinning = 1)
 
     dim, n = size(X)
@@ -10,7 +10,7 @@
     config = Dict(
         "g₀" => g₀, "β" => β, "a₀" => a₀, "b₀" => b₀,
         "t_max" => t_max, "dim" => dim, "τ" => τ,
-        "l_σ2" => l_σ2, "u_σ2" => u_σ2)
+        "l_σ2" => l_σ2, "u_σ2" => u_σ2, "method" => method)
 
     C_mc = Vector{Vector}()
     Mu_mc = Vector{Array}()
@@ -168,40 +168,15 @@ end
     reject_counts = 0 
 
     g₀ = config["g₀"]
+    method = config["method"]
     while rand() > min_d
         reject_counts += 1 
         post_sample_gauss!(X, Mu, Sig, C, k_prior)
-        min_d = min_wass_distance(Mu, Sig, g₀)
+        min_d = min_distance(Mu, Sig, g₀, method)
     end
     return reject_counts 
 end 
  
-
-# @inline function initialize!(X, Mu, Sig, C, config) 
-#     size(Mu, 2) == size(Sig, 3) ||
-#         throw(DimensionMismatch("Inconsistent array dimensions."))
-    
-#     K = size(Mu, 2)
-
-#     sample_repulsive_gauss!(X, Mu, Sig, 0, config)
-
-#     # Inner functions: Assign the component index to each 
-#     # observation according to their max log-likelihoods
-#     log_i_k(i, k) = logpdf(MvNormal(Mu[:, k], Sig[:, :, k]), X[:, i])
- 
-#     if Threads.nthreads() > 1
-#         Threads.@threads for i in eachindex(C)
-#             # Make sure that the last cluster is not assigned anything
-#             C[i] = log_i_k.(Ref(i), 1:K-1) |> argmax
-#         end
-#     else     
-#         for i in eachindex(C)
-#             # Make sure that the last cluster is not assigned anything
-#             C[i] = log_i_k.(Ref(i), 1:K-1) |> argmax
-#         end
-#     end 
-# end 
-
 
 @inline function initialize!(X, Mu, Sig, C, config, prior) 
     size(Mu, 2) == size(Sig, 3) ||
@@ -216,22 +191,17 @@ end
     log_i_k(i, k) = logpdf(MvNormal(Mu[:, k], Sig[:, :, k]), X[:, i])
  
     # C .= sample(1:K-1, length(C), replace=true)
-    if Threads.nthreads() > 1
-        Threads.@threads for i in eachindex(C)
-            # Make sure that the last cluster is not assigned anything
-            C[i] = log_i_k.(Ref(i), 1:K-1) |> argmax
-        end
-    else     
-        for i in eachindex(C)
-            # Make sure that the last cluster is not assigned anything
-            C[i] = log_i_k.(Ref(i), 1:K-1) |> argmax
-        end
-    end 
+    Threads.@threads for i in eachindex(C)
+        # Make sure that the last cluster is not assigned anything
+        C[i] = log_i_k.(Ref(i), 1:K-1) |> argmax
+    end
 end 
  
  
 @inline function sample_repulsive_gauss!(X, Mu, Sig, ℓ, config, k_prior)
     g₀ = config["g₀"]  
+    method = config["method"]
+
     K = size(Mu, 2)
     μ, Σ = nothing, nothing 
     min_d = 0.     # min wasserstein distance 
@@ -241,13 +211,14 @@ end
             Mu[:, k] .= μ
             Sig[:, :, k] .= Σ 
         end 
-        min_d = min_wass_distance(Mu, Sig, g₀) 
+        min_d = min_distance(Mu, Sig, g₀, method) 
     end 
 end 
 
 
 @inline function sample_gauss!(X, Mu, Sig, ℓ, config, k_prior)
-    g₀ = config["g₀"]  
+    # g₀ = config["g₀"]  
+    # method = config["method"]
     K = size(Mu, 2) 
     @inbounds for k in ℓ+1:K 
         μ, Σ = rand(k_prior)

@@ -1,47 +1,31 @@
-""" Sum of squares 
-"""
-@inline sum_sq(x) = sum(@turbo x.^2) 
+mean_dist_gauss(μ₁, Σ₁, μ₂, Σ₂) = sum(@turbo (μ₁ .- μ₂) .^ 2) |> sqrt
 
 
-@inline function wass_gauss(μ₁, Σ₁, μ₂, Σ₂) # = (μ₁ .- μ₂) .^ 2 |> sum_sq
+@inline function wass_dist_gauss(μ₁, Σ₁, μ₂, Σ₂) 
     Σ₂_sqrt = sqrt(Σ₂) 
-    μ_part = (μ₁ .- μ₂) .^ 2 
-    Σ_part = Σ₁ .+ Σ₂ .- 2 * sqrt(Σ₂_sqrt * Σ₁ * Σ₂_sqrt)   
-    return sum(μ_part) + tr(Σ_part)  
+    Σ_part_sqrt = sqrt(Σ₂_sqrt * Σ₁ * Σ₂_sqrt)   
+    μ_part = @tturbo (μ₁ .- μ₂) .^ 2 
+    Σ_part = @tturbo Σ₁ .+ Σ₂ .- Σ_part_sqrt 
+    return sqrt(sum(μ_part) + tr(Σ_part)) 
 end
 
 
-@inline function min_wass_distance(Mu, Sig, g₀)
-    return Threads.nthreads() == 1 ?
-        single_min_wass_distance(Mu, Sig, g₀) :
-        threaded_min_wass_distance(Mu, Sig, g₀)
-end 
-
-
-@inline function single_min_wass_distance(Mu, Sig, g₀)
+function min_distance(Mu, Sig, g₀, method)
     size(Mu, 2) == size(Sig, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions."))
 
-    K = size(Mu, 2)   
-    hₖ = 1.
-    @inbounds for i in 1:K-1, j in i+1:K
-        d = wass_gauss(
-            Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])
-        hₖ = min(hₖ, d / (d + g₀)) 
-    end   
-    return hₖ
-end 
+    g₀ != 0 || return 1.0
 
+    dist_fn = @match method begin 
+        "wasserstein" => wass_dist_gauss 
+        "mean"        => mean_dist_gauss 
+    end  
 
-@inline function threaded_min_wass_distance(Mu, Sig, g₀)
-    size(Mu, 2) == size(Sig, 3) ||
-        throw(DimensionMismatch("Inconsistent array dimensions."))
-
+    hₖ = 1.0
     K = size(Mu, 2)  
-    hₖ = 1. 
     indices = filter(c -> c[1] < c[2], CartesianIndices((1:K, 1:K)))
     Threads.@threads for (i, j) in Tuple.(indices)
-        @inbounds d = wass_gauss(
+        @inbounds d = dist_fn(
             Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])  
         hₖ = min(hₖ, d / (d + g₀)) 
     end  

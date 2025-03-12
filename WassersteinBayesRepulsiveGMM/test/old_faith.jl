@@ -6,7 +6,7 @@ using LinearAlgebra
 using CodecBzip2
 using RDatasets
 using Random 
-using StatsBase
+using StatsBase, StatsFuns
 using WassersteinBayesRepulsiveGMM  
 
 using Plots, StatsPlots
@@ -53,55 +53,9 @@ function main()
     CSV.write("results/old_faithful/C_mc.csv", C_df)
     K_df = DataFrame(K_mc', :auto)
     CSV.write("results/old_faithful/K_mc.csv", K_df)
-
-    # coord = Coord.cartesian(xmin=1, ymin=40, ymax=100)
-    # plots = [
-    #     begin
-    #         println("Drawing the MCMC sample $(i+1)")
-    #         println("The unique classes are $(unique(C_mc[end-i]))")
-
-    #         p = scatter(
-    #             data[:, 2], data[:, 3], 
-    #             legend=:none,    
-    #             marker_z=C_mc[end-i],  
-    #             markersize=3,
-    #             cmap=:viridis, 
-    #             title="MCMC Sample $(i+1)",
-    #             alpha=0.6)
-
-    #         for k in unique(C_mc[end-i])
-    #             covellipse!(
-    #                 Mu_mc[end-i][:, k], Sig_mc[end-i][:, :, k], 
-    #                 alpha=0.5, label=[k], color=:silver)
-    #         end
-
-    #         # tmp_df = copy(data)
-    #         # tmp_df.cluster = C_mc[end-i] 
-    #         # p = Gadfly.plot(
-    #         #     tmp_df, coord, x=:eruptions, y=:waiting, color=:cluster,
-    #         #     alpha=[0.95], Geom.point, 
-    #         #     Geom.ellipse(distribution=
-    #         #         MvNormal(Mu_mc[end-i][:, 1], Sig_mc[end-i][:, :, 1])),
-    #         #     layer(style(line_style=[:dot])),
-    #         #     Guide.ylabel(nothing), Guide.xlabel(nothing),
-    #         #     Theme(key_position=:none),
-    #         #     Scale.color_discrete(
-    #         #         n->get(cs.viridis, range(0, 1, length=n))
-    #         #     )
-    #         # )
-    #         p 
-    #     end 
-    #     for i in 0:2  
-    # ]
-    # p = Plots.plot(
-    #     plots..., sharey=true, sharex=true, 
-    #     layout=(1, 3), size=(800, 230))
-    
-    # p = hstack(plots...)
-    # draw(PDF("test_wass.pdf", 13inch, 3inch), p)
-
+ 
     p = plot_density_estimate(X, C_mc, Mu_mc, Sig_mc)
-    savefig(p, "test_wass.pdf") 
+    savefig(p, "test_mean.pdf") 
 end 
 
 
@@ -119,23 +73,24 @@ function plot_density_estimate(X, C_mc, Mu_mc, Sig_mc)
     grid_points = hcat(vec(xx), vec(yy)) 
 
     # Compute density for each grid point
-    function compute_density(grid_point, Mu_mc, Sig_mc)
+    function compute_density(grid_point)
         total = 0.0
         for i in eachindex(Mu_mc)
             cnt = countmap(C_mc[i]) 
             π = [cnt[j] for j in 1:length(unique(C_mc[i]))]
-            π = π ./ sum(π)
+            logπ = log.(π ./ sum(π))
             component_densities = [
-                π[k] * pdf(MvNormal(Mu_mc[i][:, k], Sig_mc[i][:, :, k]), grid_point) 
-                for k in eachindex(π)]
-            total += sum(component_densities)
+                logπ[k] + logpdf(
+                    MvNormal(Mu_mc[i][:, k], Sig_mc[i][:, :, k]), grid_point) 
+                for k in eachindex(logπ)]
+            total += exp(logsumexp(component_densities))
         end
         return total / length(Mu_mc)
     end
 
     density = zeros(size(grid_points, 1)) 
     Threads.@threads for i in 1:size(grid_points, 1)
-        density[i] = compute_density(grid_points[i, :], Mu_mc, Sig_mc) 
+        density[i] = compute_density(grid_points[i, :]) 
     end 
     density_matrix = reshape(density, (length(y_grid), length(x_grid)))
     println("Finish processing the DE computation")
@@ -145,7 +100,7 @@ function plot_density_estimate(X, C_mc, Mu_mc, Sig_mc)
         color=:black, alpha=0.3, markersize=2, label="Data")
     contour!(x_grid, y_grid, density_matrix, 
         levels=20, c=:viridis, linewidth=1, alpha=0.8)
-    title!("Density Estimate by Wass Repulsion")
+    title!("Density Estimate by Mean Repulsion")
     xlabel!("X"); ylabel!("Y")
     p 
 end 

@@ -6,7 +6,7 @@ using Distributions
 using FStrings
 using LinearAlgebra 
 using LoopVectorization
-using PDMats
+using MLStyle
 using ProgressBars
 using Random 
 using SpecialFunctions
@@ -22,8 +22,7 @@ include("numerical_Zhat.jl")
 
 include("measure/wasserstein.jl")
 include("mcmc/kernel_prior.jl")
-include("mcmc/blocked_gibbs.jl")
-include("mcmc/prior_sampler.jl")
+include("mcmc/blocked_gibbs.jl") 
 
 
 logpdf = Distributions.logpdf
