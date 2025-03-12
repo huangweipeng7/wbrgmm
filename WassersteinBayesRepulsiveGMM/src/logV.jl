@@ -1,6 +1,6 @@
 @inline function logV_nt(n, β, K; λ=1) 
     log_V = zeros(K)
-    tol = 1e-9 
+    tol = 1e-12 
  
     log_pk(k) = k * log(λ) - log(exp(λ) - 1) - logfactorial(k) 
     @inbounds for t = 1:K

@@ -23,7 +23,7 @@
     Sig = zeros(dim, dim, K+1)
     initialize!(X, Mu, Sig, C, config, prior)  
 
-    logV = logV_nt(n, β, 2K)
+    logV = logV_nt(n, β, 2K; λ=1)
     Zₖ = nothing # numerical_Zₖ(2K, dim, config, prior)
     
     pbar = ProgressBar(1:(burnin+runs))

@@ -15,14 +15,14 @@ using Plots, StatsPlots
  
 # gr()
 # theme(:wong2)
-Random.seed!(250)
+Random.seed!(20)
 
 
 function main()
     # data = CSV.File("./data/faithful_data.csv") |> DataFrame 
     # X = Matrix(data[!, 2:3]) |> transpose      
    
-    data = dataset("datasets", "s3")
+    data = dataset("datasets", "a1")
     X = Matrix(data[!, 1:2]) |> transpose  	
     X = X ./ 1000 
     dim = size(X, 1) 
@@ -30,12 +30,12 @@ function main()
     # Interesting hyper settings 
     g₀ = 0.1
     β = 1
-    τ = 0.01
-    κ = 0.1 
+    τ = 1
+    κ = 1 
     l_σ2 = 1e-6
     u_σ2 = 1e6
-    K = 20 
-    ν₀ = 10 
+    K = 30 
+    ν₀ = 3
 
     prior = KernelPrior(
         τ, zeros(dim), τ^2*I(dim), l_σ2, u_σ2, ν₀, κ^2*I(dim))
@@ -112,8 +112,8 @@ function plot_density_estimate(X, C_mc, Mu_mc, Sig_mc)
     # Generate grid
     x_min, x_max = minimum(X[1, :]) - 1, maximum(X[1, :]) + 1
     y_min, y_max = minimum(X[2, :]) - 1, maximum(X[2, :]) + 1
-    x_grid = range(x_min, x_max, length=400)
-    y_grid = range(y_min, y_max, length=400)
+    x_grid = range(x_min, x_max, length=200)
+    y_grid = range(y_min, y_max, length=200)
     xx = repeat(x_grid', length(y_grid), 1)
     yy = repeat(y_grid, 1, length(x_grid))
     grid_points = hcat(vec(xx), vec(yy)) 
@@ -133,15 +133,18 @@ function plot_density_estimate(X, C_mc, Mu_mc, Sig_mc)
         return total / length(Mu_mc)
     end
 
-    density = [compute_density(grid_points[i, :], Mu_mc, Sig_mc) 
-               for i in 1:size(grid_points, 1)]
+    density = zeros(size(grid_points, 1)) 
+    Threads.@threads for i in 1:size(grid_points, 1)
+        density[i] = compute_density(grid_points[i, :], Mu_mc, Sig_mc) 
+    end 
     density_matrix = reshape(density, (length(y_grid), length(x_grid)))
+    println("Finish processing the DE computation")
 
     # Plot
     p = scatter(X[1, :], X[2, :],  
         color=:black, alpha=0.3, markersize=2, label="Data")
     contour!(x_grid, y_grid, density_matrix, 
-        levels=30, c=:viridis, linewidth=1, alpha=0.8)
+        levels=20, c=:viridis, linewidth=1, alpha=0.8)
     title!("Density Estimate by Wass Repulsion")
     xlabel!("X"); ylabel!("Y")
     p 
