@@ -3,8 +3,12 @@
 @inline sum_sq(x) = sum(@turbo x.^2) 
 
 
-@inline wass_gauss(μ₁, Σ₁, μ₂, Σ₂) = # (μ₁ .- μ₂) .^ 2 |> sum |> sqrt
-    sqrt(sum_sq(μ₁ .- μ₂) + sum_sq(sqrt(Σ₁) .- sqrt(Σ₂)))  
+@inline function wass_gauss(μ₁, Σ₁, μ₂, Σ₂) # = (μ₁ .- μ₂) .^ 2 |> sum_sq
+    Σ₂_sqrt = sqrt(Σ₂) 
+    μ_part = (μ₁ .- μ₂) .^ 2 
+    Σ_part = Σ₁ .+ Σ₂ .- 2 * sqrt(Σ₂_sqrt * Σ₁ * Σ₂_sqrt)   
+    return sum(μ_part) + tr(Σ_part)  
+end
 
 
 @inline function min_wass_distance(Mu, Sig, g₀)
@@ -25,23 +29,6 @@ end
             Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])
         hₖ = min(hₖ, d / (d + g₀)) 
     end   
-    return hₖ
-end 
-
-
-@inline function single_mean_wass_distance(Mu, Sig, g₀)
-    size(Mu, 2) == size(Sig, 3) ||
-        throw(DimensionMismatch("Inconsistent array dimensions."))
-
-    K = size(Mu, 2)   
-    loghₖ = 0.
-    count = 0.5K * (K-1) 
-    @inbounds for i in 1:K-1, j in i+1:K
-        d = wass_gauss(
-            Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])   
-        loghₖ += log(d) - log(d + g₀)
-    end   
-    hₖ = exp(loghₖ / count)
     return hₖ
 end 
 

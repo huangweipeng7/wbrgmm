@@ -24,7 +24,7 @@
     initialize!(X, Mu, Sig, C, config, prior)  
 
     logV = logV_nt(n, β, 2K)
-    Zₖ = numerical_Zₖ(2K, dim, config, prior)
+    Zₖ = nothing # numerical_Zₖ(2K, dim, config, prior)
     
     pbar = ProgressBar(1:(burnin+runs))
     @inbounds for iter in pbar #1:(burnin+runs)
@@ -168,7 +168,7 @@ end
     reject_counts = 0 
 
     g₀ = config["g₀"]
-    while rand() > min_d 
+    while rand() > min_d
         reject_counts += 1 
         post_sample_gauss!(X, Mu, Sig, C, k_prior)
         min_d = min_wass_distance(Mu, Sig, g₀)
@@ -209,7 +209,7 @@ end
     
     K = size(Mu, 2)
 
-    sample_repulsive_gauss!(X, Mu, Sig, 0, config, prior)
+    sample_gauss!(X, Mu, Sig, 0, config, prior)
 
     # Inner functions: Assign the component index to each 
     # observation according to their max log-likelihoods
@@ -242,5 +242,16 @@ end
             Sig[:, :, k] .= Σ 
         end 
         min_d = min_wass_distance(Mu, Sig, g₀) 
+    end 
+end 
+
+
+@inline function sample_gauss!(X, Mu, Sig, ℓ, config, k_prior)
+    g₀ = config["g₀"]  
+    K = size(Mu, 2) 
+    @inbounds for k in ℓ+1:K 
+        μ, Σ = rand(k_prior)
+        Mu[:, k] .= μ
+        Sig[:, :, k] .= Σ 
     end 
 end 

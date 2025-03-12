@@ -79,8 +79,7 @@ end
     # μ is currently not in use
     cov_(X) = cov(X; dims=2, corrected=false)
 
-    dim, n = size(X)
-    τ = k_prior.smvn.τ
+    dim, n = size(X) 
   
     x̄ = mean(X; dims=2)
 
@@ -90,7 +89,7 @@ end
     biw_p = EigBoundedIW(k_prior.biw.l_σ2, k_prior.biw.u_σ2, νₙ, Ψₙ)
     Σ = rand(biw_p)
 
-    Σ₀ = inv(τ^2 * I + n * inv(Σ))
+    Σ₀ = inv(k_prior.smvn.mvn.Σ + n * inv(Σ))
     Σ₀ = round.(Σ₀, digits=10)
     μ₀ = Σ₀ * (n * inv(Σ) * x̄) |> vec 
     μ = MvNormal(μ₀, Σ₀) |> rand 

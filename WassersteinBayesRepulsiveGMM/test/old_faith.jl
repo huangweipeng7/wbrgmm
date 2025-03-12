@@ -3,6 +3,8 @@ using DataFrames
 using Distributions
 using LinearAlgebra  
 # using Gadfly
+using CodecBzip2
+using RDatasets
 using Random 
 using StatsBase
 using WassersteinBayesRepulsiveGMM  
@@ -17,25 +19,30 @@ Random.seed!(250)
 
 
 function main()
-    data = CSV.File("./data/faithful_data.csv") |> DataFrame 
-    X = Matrix(data[!, 2:3]) |> transpose  	 
+    # data = CSV.File("./data/faithful_data.csv") |> DataFrame 
+    # X = Matrix(data[!, 2:3]) |> transpose      
+   
+    data = dataset("datasets", "s3")
+    X = Matrix(data[!, 1:2]) |> transpose  	
+    X = X ./ 1000 
     dim = size(X, 1) 
     
     # Interesting hyper settings 
-    g₀ = 50
+    g₀ = 0.1
     β = 1
-    τ = 0.1 
+    τ = 0.01
+    κ = 0.1 
     l_σ2 = 1e-6
     u_σ2 = 1e6
-    K = 5 
+    K = 20 
     ν₀ = 10 
 
     prior = KernelPrior(
-        τ, zeros(Real, dim), τ^2*I(dim), l_σ2, u_σ2, ν₀, I(dim))
+        τ, zeros(dim), τ^2*I(dim), l_σ2, u_σ2, ν₀, κ^2*I(dim))
 
     C_mc, Mu_mc, Sig_mc, K_mc, llhd_mc = wrbgmm_blocked_gibbs(
         X; g₀=g₀, K=K, β=β, τ=τ, prior=prior, t_max=5,
-        l_σ2=l_σ2, u_σ2=u_σ2, burnin=2500, runs=5000, thinning=10) 
+        l_σ2=l_σ2, u_σ2=u_σ2, burnin=200, runs=300, thinning=1) 
 
     println(
         "Cluster distribution from the last iteration: \n", 
@@ -105,8 +112,8 @@ function plot_density_estimate(X, C_mc, Mu_mc, Sig_mc)
     # Generate grid
     x_min, x_max = minimum(X[1, :]) - 1, maximum(X[1, :]) + 1
     y_min, y_max = minimum(X[2, :]) - 1, maximum(X[2, :]) + 1
-    x_grid = range(x_min, x_max, length=200)
-    y_grid = range(y_min, y_max, length=200)
+    x_grid = range(x_min, x_max, length=400)
+    y_grid = range(y_min, y_max, length=400)
     xx = repeat(x_grid', length(y_grid), 1)
     yy = repeat(y_grid, 1, length(x_grid))
     grid_points = hcat(vec(xx), vec(yy)) 
@@ -132,9 +139,9 @@ function plot_density_estimate(X, C_mc, Mu_mc, Sig_mc)
 
     # Plot
     p = scatter(X[1, :], X[2, :],  
-        color=:black, alpha=0.75, markersize=2, label="Data")
+        color=:black, alpha=0.3, markersize=2, label="Data")
     contour!(x_grid, y_grid, density_matrix, 
-        levels=30, c=:viridis, linewidth=1, alpha=0.7)
+        levels=30, c=:viridis, linewidth=1, alpha=0.8)
     title!("Density Estimate by Wass Repulsion")
     xlabel!("X"); ylabel!("Y")
     p 

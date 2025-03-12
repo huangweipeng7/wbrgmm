@@ -11,8 +11,8 @@
                 # Note: The first condition is false when a = c = -Inf
                 if k >= t
                     a = c  
-                    b = logfactorial(k) - logfactorial(k - t) 
-                    b += - logfactorial(β*k + n - 1) + logfactorial(β*k - 1) 
+                    b = loggamma(k+1) - loggamma(k-t+1) 
+                    b += - loggamma(β*k+n) + loggamma(β*k) 
                     b += log_pk(k)
                     c = logsumexp(a, b) 
                 end
@@ -22,7 +22,7 @@
             log_V[t] = c
         end 
     end
-    println(log_V)
+    println("logV: ", log_V)
     return log_V
 end
  
