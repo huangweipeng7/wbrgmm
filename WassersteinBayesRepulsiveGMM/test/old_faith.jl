@@ -1,10 +1,9 @@
 using CSV
 using DataFrames
 using Distributions
+using JLD2 
 using LinearAlgebra  
-using Gadfly
-using CodecBzip2
-using RDatasets
+using Gadfly  
 using Random 
 using StatsBase, StatsFuns
 using WassersteinBayesRepulsiveGMM  
@@ -50,28 +49,24 @@ function main(datafile, method, kwargs...)
     prior = KernelPrior(
         τ, zeros(dim), τ^2*I(dim), l_σ2, u_σ2, ν₀, κ^2*I(dim))
 
-    C_mc, Mu_mc, Sig_mc, K_mc, llhd_mc = wrbgmm_blocked_gibbs(
+    mc_samples = wrbgmm_blocked_gibbs(
         X; g₀=g₀, K=K, β=β, τ=τ, prior=prior, t_max=5, method=method,
         l_σ2=l_σ2, u_σ2=u_σ2, burnin=200, runs=300, thinning=1) 
 
     println(
         "Cluster distribution from the last iteration: \n", 
-        countmap(C_mc[end])) 
+        countmap(mc_samples[end].C)) 
 
-    mkpath("results/old_faithful/")
-    C_df = DataFrame(C_mc, :auto)
-    CSV.write("results/old_faithful/C_mc.csv", C_df)
-    K_df = DataFrame(K_mc', :auto)
-    CSV.write("results/old_faithful/K_mc.csv", K_df)
+    mkpath("results/")
+    jldsave("results/$(datafile)_$(method).jld2"; mc_samples)
  
-    p = plot_density_estimate(X, C_mc, Mu_mc, Sig_mc)
-    # savefig(p, "$(datafile)_contour.pdf") 
-    draw(PDF("$(datafile)_contour.pdf", 7inch, 5inch), p)
-
+    # p = plot_density_estimate(X, mc_samples)
+    # # savefig(p, "$(datafile)_contour.pdf") 
+    # draw(PDF("$(datafile)_contour.pdf", 7inch, 5inch), p) 
 end 
  
 
-function plot_density_estimate(X, C_mc, Mu_mc, Sig_mc)
+function plot_density_estimate(X, mc_samples)
     # Generate grid
     x_min, x_max = minimum(X[1, :]) - 1, maximum(X[1, :]) + 1
     y_min, y_max = minimum(X[2, :]) - 1, maximum(X[2, :]) + 1
@@ -84,23 +79,24 @@ function plot_density_estimate(X, C_mc, Mu_mc, Sig_mc)
     # Compute density for each grid point
     function compute_density(grid_point)
         total = 0.0
-        for i in eachindex(Mu_mc)
-            cnt = countmap(C_mc[i]) 
-            π = [cnt[j] for j in 1:length(unique(C_mc[i]))]
+        for i in eachindex(mc_samples)
+            cnt = countmap(mc_samples[i].C) 
+            π = [cnt[j] for j in 1:length(unique(mc_samples[i].C))]
             logπ = log.(π ./ sum(π))
             component_densities = [
                 logπ[k] + logpdf(
-                    MvNormal(Mu_mc[i][:, k], Sig_mc[i][:, :, k]), grid_point) 
+                    MvNormal(mc_samples[i].Mu[:, k], mc_samples[i].Sig[:, :, k]), 
+                    grid_point) 
                 for k in eachindex(logπ)]
             total += exp(logsumexp(component_densities))
         end
-        return total / length(Mu_mc)
+        return total / length(mc_samples)
     end
 
     density = zeros(size(grid_points, 1)) 
     Threads.@threads for i in 1:size(grid_points, 1)
         density[i] = compute_density(grid_points[i, :]) 
-    end 
+    end
     density_matrix = reshape(density, (length(y_grid), length(x_grid)))
     println("Finish processing the DE computation")
 
@@ -111,24 +107,33 @@ function plot_density_estimate(X, C_mc, Mu_mc, Sig_mc)
     #     levels=20, linewidth=1, alpha=0.8)
     # title!("Density Estimate by Mean Repulsion")
     # xlabel!("X"); ylabel!("Y")
-    coord = Coord.cartesian(
-        xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max)
+ 
     p = Gadfly.plot(  
-        coord, 
+        Coord.cartesian(
+            xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max), 
         layer(x=X[1, :], y=X[2, :], Geom.point, alpha=[0.5],
             Theme(default_color="black")),
         layer(z=density_matrix, x=x_grid, y=y_grid, 
-            Geom.contour(levels=10)), 
-        Guide.ylabel(nothing), 
-        Guide.xlabel(nothing), 
-        Scale.color_discrete(
-            n->get(cs.bone, range(0, 1, length=n))
+            Geom.contour(levels=15)), 
+        Guide.ylabel(nothing), Guide.xlabel(nothing), 
+        Scale.color_discrete(n -> get(cs.linear_tritanopic_krjcw_5_98_c46_n256, range(0, 1, length=n)))
         )
-    )
+    println("Finish plotting")
     p 
 end 
 
 
-if abspath(PROGRAM_FILE) == @__FILE__
-    main("sim_data1", "mean")
+# if abspath(PROGRAM_FILE) == @__FILE__
+#     main("sim_data1", "mean")
+# end 
+
+function load_and_plot(datafile, method)
+    mc_samples = load(
+        "results/$(datafile)_$(method).jld2", "mc_samples")  
+    X = load_data(datafile)
+    p = plot_density_estimate(X, mc_samples)
+    draw(PDF("$(datafile)_$(method)_contour.pdf", 7inch, 5inch), p) 
 end 
+
+
+load_and_plot("sim_data1", "mean")

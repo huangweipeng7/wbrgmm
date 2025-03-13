@@ -1,3 +1,12 @@
+struct MCSample
+    Mu::Array{Real, 2}
+    Sig::Array{Real, 3}
+    C::Vector{Real}
+    K::Int 
+    llhd::Real
+end 
+
+
 @inline function wrbgmm_blocked_gibbs(
     X; g₀ = 100., β = 1., 
     a₀ = 1., b₀ = 1., τ = 1.,
@@ -12,11 +21,7 @@
         "t_max" => t_max, "dim" => dim, "τ" => τ,
         "l_σ2" => l_σ2, "u_σ2" => u_σ2, "method" => method)
 
-    C_mc = Vector{Vector}()
-    Mu_mc = Vector{Array}()
-    Sig_mc = Vector{Array}()
-    K_mc = Vector{Int}()
-    llhd_mc = Vector{Float64}()
+    mc_samples::Vector{MCSample} = Vector()
 
     C = zeros(Int, n) 
     Mu = zeros(dim, K+1)
@@ -39,15 +44,14 @@
 
         set_description(pbar, f"log-likelihood: {llhd:.3f}")
         
-        if iter > burnin && iter % thinning == 0 
-            push!(C_mc, deepcopy(C))
-            push!(Mu_mc, deepcopy(Mu))  
-            push!(Sig_mc, deepcopy(Sig))
-            push!(K_mc, size(Mu, 2)-1)
-            push!(llhd_mc, llhd)
+        if iter > burnin && iter % thinning == 0  
+            mc_sample = MCSample(
+                deepcopy(Mu), deepcopy(Sig), 
+                deepcopy(C), size(Mu, 2)-1, llhd)
+            push!(mc_samples, mc_sample)
         end
     end 
-    return C_mc, Mu_mc, Sig_mc, K_mc, llhd_mc
+    return mc_samples
 end 
 
 

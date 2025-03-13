@@ -1,6 +1,6 @@
 module WassersteinBayesRepulsiveGMM
 
-export wrbgmm_blocked_gibbs, KernelPrior
+export wrbgmm_blocked_gibbs, KernelPrior, MCSample
  
 using Distributions 
 using FStrings
