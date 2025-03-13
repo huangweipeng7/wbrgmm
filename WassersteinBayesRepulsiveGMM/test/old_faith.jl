@@ -2,46 +2,56 @@ using CSV
 using DataFrames
 using Distributions
 using LinearAlgebra  
-# using Gadfly
+using Gadfly
 using CodecBzip2
 using RDatasets
 using Random 
 using StatsBase, StatsFuns
 using WassersteinBayesRepulsiveGMM  
 
-using Plots, StatsPlots
-# import Cairo, Fontconfig
-# import ColorSchemes as cs
+# using Plots, StatsPlots
+import Cairo, Fontconfig
+import ColorSchemes as cs
  
 # gr()
 # theme(:wong2)
 Random.seed!(20)
 
 
-function main()
-    # data = CSV.File("./data/faithful_data.csv") |> DataFrame 
-    # X = Matrix(data[!, 2:3]) |> transpose      
-   
-    data = dataset("datasets", "a1")
-    X = Matrix(data[!, 1:2]) |> transpose  	
-    X = X ./ 1000 
+function load_data(datafile) 
+    df = "./data/$(datafile).csv" |> CSV.File |> DataFrame
+    
+    df_ = nothing
+    if datafile == "faithful_data.csv"
+        df_ = df[!, 2:3]
+    else 
+        df_ = df[!, 1:2]
+    end 
+
+    return df_ |> Matrix |> transpose 
+end 
+
+
+function main(datafile, method, kwargs...) 
+    X = load_data(datafile)
+    println(size(X))
     dim = size(X, 1) 
     
     # Interesting hyper settings 
-    g₀ = 0.1
+    g₀ = 1
     β = 1
-    τ = 1
+    τ = 0.01
     κ = 1 
     l_σ2 = 1e-6
     u_σ2 = 1e6
-    K = 30 
-    ν₀ = 3
+    K = 10 
+    ν₀ = 5
 
     prior = KernelPrior(
         τ, zeros(dim), τ^2*I(dim), l_σ2, u_σ2, ν₀, κ^2*I(dim))
 
     C_mc, Mu_mc, Sig_mc, K_mc, llhd_mc = wrbgmm_blocked_gibbs(
-        X; g₀=g₀, K=K, β=β, τ=τ, prior=prior, t_max=5,
+        X; g₀=g₀, K=K, β=β, τ=τ, prior=prior, t_max=5, method=method,
         l_σ2=l_σ2, u_σ2=u_σ2, burnin=200, runs=300, thinning=1) 
 
     println(
@@ -55,12 +65,11 @@ function main()
     CSV.write("results/old_faithful/K_mc.csv", K_df)
  
     p = plot_density_estimate(X, C_mc, Mu_mc, Sig_mc)
-    savefig(p, "test_mean.pdf") 
+    # savefig(p, "$(datafile)_contour.pdf") 
+    draw(PDF("$(datafile)_contour.pdf", 7inch, 5inch), p)
+
 end 
-
-
-using Plots, Distributions
-
+ 
 
 function plot_density_estimate(X, C_mc, Mu_mc, Sig_mc)
     # Generate grid
@@ -96,14 +105,30 @@ function plot_density_estimate(X, C_mc, Mu_mc, Sig_mc)
     println("Finish processing the DE computation")
 
     # Plot
-    p = scatter(X[1, :], X[2, :],  
-        color=:black, alpha=0.3, markersize=2, label="Data")
-    contour!(x_grid, y_grid, density_matrix, 
-        levels=20, c=:viridis, linewidth=1, alpha=0.8)
-    title!("Density Estimate by Mean Repulsion")
-    xlabel!("X"); ylabel!("Y")
+    # p = scatter(X[1, :], X[2, :],  
+    #     color=:black, alpha=0.3, markersize=2, label="Data")
+    # contour!(x_grid, y_grid, density_matrix, 
+    #     levels=20, linewidth=1, alpha=0.8)
+    # title!("Density Estimate by Mean Repulsion")
+    # xlabel!("X"); ylabel!("Y")
+    coord = Coord.cartesian(
+        xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max)
+    p = Gadfly.plot(  
+        coord, 
+        layer(x=X[1, :], y=X[2, :], Geom.point, alpha=[0.5],
+            Theme(default_color="black")),
+        layer(z=density_matrix, x=x_grid, y=y_grid, 
+            Geom.contour(levels=10)), 
+        Guide.ylabel(nothing), 
+        Guide.xlabel(nothing), 
+        Scale.color_discrete(
+            n->get(cs.bone, range(0, 1, length=n))
+        )
+    )
     p 
 end 
 
 
-main() 
+if abspath(PROGRAM_FILE) == @__FILE__
+    main("sim_data1", "mean")
+end 
