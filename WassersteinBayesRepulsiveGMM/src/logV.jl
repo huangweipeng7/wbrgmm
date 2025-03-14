@@ -21,8 +21,7 @@
             end
             log_V[t] = c
         end 
-    end
-    println("logV: ", log_V)
+    end 
     return log_V
 end
  

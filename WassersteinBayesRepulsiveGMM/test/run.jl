@@ -7,46 +7,53 @@ using Random
 using StatsBase
 using WassersteinBayesRepulsiveGMM  
 
-include("./Data.jl"); import .Data
- 
+include("./data.jl"); import .load_data
+include("./parse_args.jl"); import .parse_cmd
+
 Random.seed!(20)
  
 
-function main(datafile, method, kwargs...) 
-    X = Data.load_data(datafile)
-    println(size(X))
-    dim = size(X, 1) 
+function main(kwargs) 
+    display(kwargs)
     
-    # Interesting hyper settings 
-    g₀ = 1
+    dataname = kwargs["dataname"]
+    method = kwargs["method"]
+
+    n_burnin = kwargs["n_burnin"]
+    n_iter = kwargs["n_iter"]
+    thinning = kwargs["thinning"]
+
+    g₀ = kwargs["g0"]
     β = 1
-    τ = 0.01
+    τ = kwargs["tau"]
     κ = 1 
-    l_σ2 = 1e-6
-    u_σ2 = 1e6
+    l_σ2 = 1e-8
+    u_σ2 = 1e8
     K = 10 
-    ν₀ = 5
+    ν₀ = kwargs["nu0"]
+
+    X = load_data(dataname)
+    dim = size(X, 1) 
 
     prior = KernelPrior(
         τ, zeros(dim), τ^2*I(dim), l_σ2, u_σ2, ν₀, κ^2*I(dim))
 
     mc_samples = wrbgmm_blocked_gibbs(
-        X; g₀=g₀, K=K, β=β, τ=τ, prior=prior, t_max=5, method=method,
-        l_σ2=l_σ2, u_σ2=u_σ2, burnin=200, runs=300, thinning=1) 
+        X; g₀=g₀, K=K, β=β, τ=τ, prior=prior, 
+        t_max=5, method=method, l_σ2=l_σ2, u_σ2=u_σ2, 
+        n_burnin=n_burnin, n_iter=n_iter, thinning=thinning) 
 
-    println(
-        "Cluster distribution from the last iteration: \n", 
-        countmap(mc_samples[end].C)) 
+    # println(
+    #     "Cluster distribution from the last iteration: \n", 
+    #     countmap(mc_samples[end].C)) 
 
+    @info "Saving the mcmc samples" 
     mkpath("results/")
-    jldsave("results/$(datafile)_$(method).jld2"; mc_samples))
- 
-    # p = plot_density_estimate(X, mc_samples)
-    # # savefig(p, "$(datafile)_contour.pdf") 
-    # draw(PDF("$(datafile)_contour.pdf", 7inch, 5inch), p) 
+    jldsave("results/$(dataname)_$(method).jld2"; mc_samples)  
+    @info "Process finished" 
 end 
  
 
-if abspath(PROGRAM_FILE) == @__FILE__
-    main("sim_data1", "mean")
+if abspath(PROGRAM_FILE) == @__FILE__ 
+    main(parse_cmd())
 end 

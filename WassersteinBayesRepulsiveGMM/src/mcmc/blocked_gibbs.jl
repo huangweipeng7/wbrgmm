@@ -8,11 +8,16 @@ end
 
 
 @inline function wrbgmm_blocked_gibbs(
-    X; g₀ = 100., β = 1., 
-    a₀ = 1., b₀ = 1., τ = 1.,
-    l_σ2 = 0.001, u_σ2 = 10000.,   
-    prior = nothing, method="wasserstein",
-    K = 5, t_max = 2, burnin = 2000, runs = 3000, thinning = 1)
+    X; g₀ = 100., β = 1., a₀ = 1., b₀ = 1., τ = 1.,
+    l_σ2 = 0.001, u_σ2 = 10000., prior = nothing, 
+    K = 5, t_max = 2, method="wasserstein", 
+    n_burnin = 2000, n_iter = 3000, thinning = 1)
+
+    if method == "no" && g₀ ≠ 1
+        g₀ = 1. 
+        @warn "For a non-repulsion method setting, g₀ has to be 1. 
+            Automatic change to g₀ has been done!" 
+    end 
 
     dim, n = size(X)
 
@@ -31,8 +36,9 @@ end
     logV = logV_nt(n, β, 2K; λ=1)
     Zₖ = nothing # numerical_Zₖ(2K, dim, config, prior)
     
-    pbar = ProgressBar(1:(burnin+runs))
-    @inbounds for iter in pbar #1:(burnin+runs)
+    n_runs = n_burnin + n_iter
+    pbar = Progress(n_runs, barglyphs=BarGlyphs("[=> ]"), color=:white)
+    @inbounds for iter in 1:n_runs
         # println(iter)
         C, Mu, Sig, llhd = post_sample_C!(
             X, Mu, Sig, C, logV, Zₖ, config, prior) 
@@ -42,9 +48,10 @@ end
         
         post_sample_repulsive_gauss!(X, Mu, Sig, C, config, prior) 
 
-        set_description(pbar, f"log-likelihood: {llhd:.3f}")
-        
-        if iter > burnin && iter % thinning == 0  
+        # set_description(pbar, f"log-likelihood: {llhd:.3f}")
+        next!(pbar; showvalues=[(:iter, iter), (:llhd, llhd)])
+
+        if iter > n_burnin && iter % thinning == 0  
             mc_sample = MCSample(
                 deepcopy(Mu), deepcopy(Sig), 
                 deepcopy(C), size(Mu, 2)-1, llhd)

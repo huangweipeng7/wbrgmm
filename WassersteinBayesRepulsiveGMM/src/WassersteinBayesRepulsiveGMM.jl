@@ -7,7 +7,7 @@ using FStrings
 using LinearAlgebra 
 using LoopVectorization
 using MLStyle
-using ProgressBars
+using ProgressMeter
 using Random 
 using SpecialFunctions
 using Statistics

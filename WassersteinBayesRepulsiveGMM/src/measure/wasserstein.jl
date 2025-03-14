@@ -14,6 +14,9 @@ function min_distance(Mu, Sig, g₀, method)
     size(Mu, 2) == size(Sig, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions."))
 
+    (method == "no" && g₀ ≠ 1) &&
+        raise("For a no-repulsion setting, g₀ ≠ 1.")
+
     g₀ != 0 || return 1.0
 
     dist_fn = @match method begin 
