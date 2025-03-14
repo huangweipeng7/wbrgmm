@@ -38,8 +38,7 @@ end
     
     n_runs = n_burnin + n_iter
     pbar = Progress(n_runs, barglyphs=BarGlyphs("[=> ]"), color=:white)
-    @inbounds for iter in 1:n_runs
-        # println(iter)
+    @inbounds for iter in 1:n_runs 
         C, Mu, Sig, llhd = post_sample_C!(
             X, Mu, Sig, C, logV, Zₖ, config, prior) 
 
@@ -47,9 +46,10 @@ end
             X, C, Mu, Sig, Zₖ, t_max; approx=true)  
         
         post_sample_repulsive_gauss!(X, Mu, Sig, C, config, prior) 
-
-        # set_description(pbar, f"log-likelihood: {llhd:.3f}")
-        next!(pbar; showvalues=[(:iter, iter), (:llhd, llhd)])
+ 
+        next!(pbar; 
+            showvalues=[
+                (:iter, iter), (:loglikelihood, round(llhd, digits=3))])
 
         if iter > n_burnin && iter % thinning == 0  
             mc_sample = MCSample(

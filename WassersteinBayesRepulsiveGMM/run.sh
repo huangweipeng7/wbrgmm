@@ -7,11 +7,11 @@ julia -t4 ./test/run.jl \
 	--n_burnin 4000 \
 	--n_iter 8000 \
 	--thinning 5 \
-	--tau 0.01 \
+	--tau 0.1 \
 	--g0 0.1 \
 	--nu0 5 
 
-julia -t12 ./test/plot.jl --dataname sim_data1 --method mean  
+julia -t8 ./test/plot.jl --dataname sim_data1 --method mean  
 #########################################
 
 
