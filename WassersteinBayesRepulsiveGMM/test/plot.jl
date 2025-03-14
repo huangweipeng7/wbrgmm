@@ -70,13 +70,12 @@ function plot_density_estimate(X, mc_samples, kwargs)
     p = Gadfly.plot(  
         Coord.cartesian(
             xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max), 
-        layer(x=X[1, :], y=X[2, :], Geom.point, size=2.5, 
+        layer(z=density_matrix, x=x_grid, y=y_grid, alpha=[0.8],
+            Geom.contour(levels=15), Theme(minor_label_font_size=16pt)), 
+        layer(x=X[1, :], y=X[2, :], Geom.point, 
             Theme(
                 default_color="white", 
-                discrete_highlight_color=c->["black"], 
-                minor_label_font_size=16pt)),
-        layer(z=density_matrix, x=x_grid, y=y_grid, 
-            Geom.contour(levels=15)), 
+                discrete_highlight_color=c->["black"])),
         Guide.ylabel(nothing), Guide.xlabel(nothing),
         Theme(key_position=:none),   
         Scale.color_discrete(
