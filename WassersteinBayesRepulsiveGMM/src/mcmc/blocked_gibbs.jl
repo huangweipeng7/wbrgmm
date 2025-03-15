@@ -13,8 +13,8 @@ end
     K = 5, t_max = 2, method="wasserstein", 
     n_burnin = 2000, n_iter = 3000, thinning = 1)
 
-    if method == "no" && g₀ ≠ 1
-        g₀ = 1. 
+    if method == "no" && g₀ ≠ 0
+        g₀ = 0. 
         @warn "For a non-repulsion method setting, g₀ has to be 1. 
             Automatic change to g₀ has been done!" 
     end 
@@ -184,6 +184,7 @@ end
         reject_counts += 1 
         post_sample_gauss!(X, Mu, Sig, C, k_prior)
         min_d = min_distance(Mu, Sig, g₀, method)
+        println(min_d)
     end
     return reject_counts 
 end 

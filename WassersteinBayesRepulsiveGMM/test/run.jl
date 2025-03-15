@@ -45,7 +45,7 @@ function main(kwargs)
     @info "Saving the MCMC samples" 
     mkpath("./results/")
     jldsave("results/$(dataname)_$(method).jld2"; mc_samples)  
-    @info "Process finished\n\n" 
+    @info "Process finished" 
 end 
   
 

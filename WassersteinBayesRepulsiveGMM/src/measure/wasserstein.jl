@@ -3,7 +3,7 @@ mean_dist_gauss(μ₁, Σ₁, μ₂, Σ₂) = sum(@turbo (μ₁ .- μ₂) .^ 2) 
 
 @inline function wass_dist_gauss(μ₁, Σ₁, μ₂, Σ₂) 
     Σ₂_sqrt = sqrt(Σ₂) 
-    Σ_part_sqrt = sqrt(Σ₂_sqrt * Σ₁ * Σ₂_sqrt)   
+    Σ_part_sqrt = 2 * sqrt(Σ₂_sqrt * Σ₁ * Σ₂_sqrt)   
     μ_part = @tturbo (μ₁ .- μ₂) .^ 2 
     Σ_part = @tturbo Σ₁ .+ Σ₂ .- Σ_part_sqrt 
     return sqrt(sum(μ_part) + tr(Σ_part)) 
@@ -14,8 +14,8 @@ function min_distance(Mu, Sig, g₀, method)
     size(Mu, 2) == size(Sig, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions."))
 
-    (method == "no" && g₀ ≠ 1) &&
-        raise("For a no-repulsion setting, g₀ ≠ 1.")
+    (method == "no" && g₀ ≠ 0) &&
+        raise("For a no-repulsion setting, g₀ ≠ 0.")
 
     g₀ != 0 || return 1.0
 
