@@ -27,15 +27,15 @@ function main(kwargs)
     τ = kwargs["tau"]
     ν₀ = kwargs["nu0"]
     β = 1
-    κ = 1 
+    θ = 1 
     l_σ2, u_σ2 = 1e-8, 1e8
-    K = 10 
+    K = 1
 
     X = load_data(dataname)
     dim = size(X, 1) 
 
     prior = KernelPrior(
-        τ, zeros(dim), τ^2*I(dim), l_σ2, u_σ2, ν₀, κ^2*I(dim))
+        τ, zeros(dim), τ^2*I(dim), l_σ2, u_σ2, ν₀, θ^2*I(dim))
 
     mc_samples = wrbgmm_blocked_gibbs(
         X; g₀=g₀, K=K, β=β, τ=τ, prior=prior, 

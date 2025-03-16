@@ -33,7 +33,8 @@ end
     Sig = zeros(dim, dim, K+1)
     initialize!(X, Mu, Sig, C, config, prior)  
 
-    logV = logV_nt(n, β, 2K; λ=1)
+    n_init_comp::Int = round(n/2)
+    logV = logV_nt(n, β, n_init_comp; λ=1)
     Zₖ = nothing # numerical_Zₖ(2K, dim, config, prior)
     
     n_runs = n_burnin + n_iter
@@ -57,6 +58,8 @@ end
                 deepcopy(C), size(Mu, 2)-1, llhd)
             push!(mc_samples, mc_sample)
         end
+
+        # println("K number: $(unique(C) |> length)")
     end 
     return mc_samples
 end 
@@ -176,17 +179,14 @@ end
 
 @inline function post_sample_repulsive_gauss!(X, Mu, Sig, C, config, k_prior)
     min_d = 0.              # min wasserstein distance
-    reject_counts = 0 
-
-    g₀ = config["g₀"]
-    method = config["method"]
-    while rand() > min_d
-        reject_counts += 1 
+    g₀, method = config["g₀"], config["method"]
+    while rand() > min_d 
         post_sample_gauss!(X, Mu, Sig, C, k_prior)
-        min_d = min_distance(Mu, Sig, g₀, method)
-        println(min_d)
-    end
-    return reject_counts 
+        min_d = min_distance(Mu, Sig, g₀, method) 
+    end 
+    # println(min_d)
+    # display(Mu)
+    # println()
 end 
  
 
@@ -196,7 +196,7 @@ end
     
     K = size(Mu, 2)
 
-    sample_gauss!(X, Mu, Sig, 0, config, prior)
+    sample_repulsive_gauss!(X, Mu, Sig, 0, config, prior)
 
     # Inner functions: Assign the component index to each 
     # observation according to their max log-likelihoods
@@ -225,12 +225,13 @@ end
         end 
         min_d = min_distance(Mu, Sig, g₀, method) 
     end 
+    # println("...", min_d)
+    # display(Mu)
+    # println()
 end 
 
 
-@inline function sample_gauss!(X, Mu, Sig, ℓ, config, k_prior)
-    # g₀ = config["g₀"]  
-    # method = config["method"]
+@inline function sample_gauss!(X, Mu, Sig, ℓ, config, k_prior) 
     K = size(Mu, 2) 
     @inbounds for k in ℓ+1:K 
         μ, Σ = rand(k_prior)

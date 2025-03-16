@@ -91,7 +91,7 @@ end
     biw_p = EigBoundedIW(k_prior.biw.l_σ2, k_prior.biw.u_σ2, νₙ, Ψₙ)
     Σ = rand(biw_p)
 
-    Σ₀ = inv(k_prior.smvn.mvn.Σ + n * inv(Σ))
+    Σ₀ = inv(inv(k_prior.smvn.mvn.Σ) + n * inv(Σ))
     Σ₀ = round.(Σ₀, digits=10)
     μ₀ = Σ₀ * (n * inv(Σ) * x̄) |> vec 
     μ = MvNormal(μ₀, Σ₀) |> rand 

@@ -18,8 +18,8 @@ function plot_density_estimate(X, mc_samples, kwargs)
     # Generate grid
     x_min, x_max = minimum(X[1, :]) - 1, maximum(X[1, :]) + 1
     y_min, y_max = minimum(X[2, :]) - 1, maximum(X[2, :]) + 1
-    x_grid = range(x_min, x_max, length=250)
-    y_grid = range(y_min, y_max, length=250)
+    x_grid = range(x_min, x_max, length=100)
+    y_grid = range(y_min, y_max, length=100)
     xx = repeat(x_grid', length(y_grid), 1)
     yy = repeat(y_grid, 1, length(x_grid))
     grid_points = hcat(vec(xx), vec(yy)) 
@@ -30,13 +30,15 @@ function plot_density_estimate(X, mc_samples, kwargs)
         p = zeros(length(mc_samples))
         Threads.@threads for i in eachindex(mc_samples)
             cnt = countmap(mc_samples[i].C) 
-            π = [cnt[j] for j in 1:length(unique(mc_samples[i].C))]
-            π = π ./ sum(π) 
+            pi = [cnt[j] for j in 1:length(unique(mc_samples[i].C))]
+            pi = pi ./ sum(pi) 
             component_densities = [
-                π[k] * pdf(
-                    MvNormal(mc_samples[i].Mu[:, k], mc_samples[i].Sig[:, :, k]), 
-                    grid_point) 
-                for k in eachindex(π)]
+                pi[k] * pdf(
+                    MvNormal(
+                        mc_samples[i].Mu[:, k], 
+                        mc_samples[i].Sig[:, :, k]), 
+                        grid_point) 
+                for k in eachindex(pi)]
             # total += exp(logsumexp(component_densities))
             p[i] = sum(component_densities) 
         end
@@ -57,11 +59,15 @@ function plot_density_estimate(X, mc_samples, kwargs)
         "wasserstein" => "WRGM"
         "no" => "DPGM"
     end 
+
     # Plot
+    logcpo = round(
+        mean([mc_sample.llhd for mc_sample in mc_samples]), 
+        digits=3)
     p = scatter(X[1, :], X[2, :],  
          markercolor=:white,
         # color=:black, alpha=0.3, 
-        markersize=2.5, label="Data")
+        markersize=2.5, label="log-CPO: $(logcpo)")
     contour!(x_grid, y_grid, density_matrix, cmap=:viridis,
         levels=20, linewidth=1, alpha=0.8)
     title!("Density Estimate by $(rep_type)")
