@@ -25,9 +25,10 @@ function min_distance(Mu, Sig, g₀, method)
     end  
 
     hₖ = 1.0
-    K = size(Mu, 2)  
-    indices = filter(c -> c[1] < c[2], CartesianIndices((1:K, 1:K)))
+    K = size(Mu, 2)
     d_mat = ones(K, K)
+  
+    indices = filter(c -> c[1] < c[2], CartesianIndices((1:K, 1:K)))
     Threads.@threads for (i, j) in Tuple.(indices)
         @inbounds d = dist_fn(
             Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])  

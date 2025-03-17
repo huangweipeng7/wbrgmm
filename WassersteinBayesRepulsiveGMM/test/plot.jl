@@ -1,12 +1,13 @@
-# using Gadfly 
-using Plots, StatsPlots 
+using DataFrames
+using Gadfly 
+# using Plots, StatsPlots 
 using JLD2   
 using MLStyle
 using Distributions, StatsBase, StatsFuns
 using WassersteinBayesRepulsiveGMM 
 
-# import Cairo, Compose, Fontconfig
-# import ColorSchemes as cs
+import Cairo, Compose, Fontconfig
+import ColorSchemes as cs
 
 include("./data.jl"); import .load_data
 include("./parse_args.jl"); import .parse_plot_cmd
@@ -93,7 +94,73 @@ function plot_density_estimate(X, mc_samples, kwargs)
     #     "Density Estimation with $(method) Repulsion", 
     #     Compose.fontsize(17pt))
     println("Finish plotting\n\n\n")
-    p 
+    savefig(p, "$(dataname)_$(method)_contour.pdf")
+end 
+
+
+function plot_min_d_all(X, mc_samples_m, mc_samples_w, kwargs)
+    function compute(mc_samples)
+        min_d_vec = zeros(length(mc_samples))
+        for (k, mc_sample) in enumerate(mc_samples)
+            K = size(mc_sample.Mu, 2)  
+            d_mat = fill(Inf, K, K)
+            indices = filter(c -> c[1] < c[2], CartesianIndices((1:K, 1:K)))
+            Threads.@threads for (i, j) in Tuple.(indices) 
+                d = (mc_sample.Mu[:, i] .- mc_sample.Mu[:, j]) .^2 |> sum |> sqrt
+                d_mat[i, j] = d 
+            end 
+            min_d_vec[k] = minimum(d_mat)  
+        end
+        min_d_vec 
+    end 
+
+    D = [
+        DataFrame(x=compute(mc_samples_m), method="Mean"),
+        DataFrame(x=compute(mc_samples_w), method="Wasserstein"),
+    ]
+    # Plot 
+    p = plot(vcat(D...), x=:x, color=:method, 
+        Theme(alphas=[0.6]), Stat.density, 
+        Geom.polygon(fill=true, preserve_order=true),
+        Guide.colorkey(title=""), 
+        Guide.title("KDE of minimal mean distance")
+    ) 
+ 
+    dataname = kwargs["dataname"]
+    draw(PDF("$(dataname)_min_dist_kde.pdf", 4inch, 3inch), p) 
+    println("Finish plotting\n\n\n") 
+end 
+
+
+function plot_min_d(X, mc_samples, kwargs)
+    dataname = kwargs["dataname"]
+    method = kwargs["method"]
+
+    rep_type = @match method begin
+        "mean" => "MRGM"
+        "wasserstein" => "WRGM"
+        "no" => "DPGM"
+    end 
+
+    min_d_vec = zeros(length(mc_samples))
+    for (k, mc_sample) in enumerate(mc_samples)
+        K = size(mc_sample.Mu, 2)  
+        d_mat = fill(Inf, K, K)
+        indices = filter(c -> c[1] < c[2], CartesianIndices((1:K, 1:K)))
+        Threads.@threads for (i, j) in Tuple.(indices) 
+            d = (mc_sample.Mu[:, i] .- mc_sample.Mu[:, j]) .^2 |> sum |> sqrt
+            d_mat[i, j] = d 
+        end 
+        min_d_vec[k] = minimum(d_mat)  
+    end 
+ 
+    # Plot 
+    p = plot(x=min_d_vec, Theme(alphas=[0.6]),
+        Stat.density, 
+        Guide.title("KDE of minimal mean distance with $(method) Repulsion")) 
+ 
+    draw(PDF("$(dataname)_min_dist.pdf", 4inch, 3inch), p)
+    println("Finish plotting\n\n\n")
 end 
 
 
@@ -103,14 +170,27 @@ function load_and_plot(kwargs)
     dataname = kwargs["dataname"]
     method = kwargs["method"]
     
-    mc_samples = JLD2.load(
-        "results/$(dataname)_$(method).jld2", "mc_samples")  
-    display(mc_samples[end].Mu)
-    display(mc_samples[end].Sig)
+    mc_sample_dict = JLD2.load(
+        "results/$(dataname)_mean.jld2")   
+    mc_samples_m = mc_sample_dict["mc_samples"]
+
+    mc_sample_dict = JLD2.load(
+        "results/$(dataname)_wasserstein.jld2")   
+    mc_samples_w = mc_sample_dict["mc_samples"]
+    
     X = load_data(dataname)
-    p = plot_density_estimate(X, mc_samples, kwargs)
+    # p = plot_density_estimate(X, mc_samples, kwargs)
+    # # draw(PDF("$(dataname)_$(method)_contour.pdf", 6.3inch, 5inch), p) 
+    kwargs["g₀"] = mc_sample_dict["g₀"]
+
+    # p = plot_min_d(X, mc_samples, kwargs)
+    # # draw(PDF("$(dataname)_$(method)_contour.pdf", 6.3inch, 5inch), p) 
+    # # savefig(p, "$(dataname)_$(method)_min_dist.pdf")
+    # draw(PDF("$(dataname)_$(method)_min_dist.pdf", 4inch, 3inch), p)
+
+    plot_min_d_all(X, mc_samples_m, mc_samples_w, kwargs)
     # draw(PDF("$(dataname)_$(method)_contour.pdf", 6.3inch, 5inch), p) 
-    savefig(p, "$(dataname)_$(method)_contour.pdf")
+    # savefig(p, "$(dataname)_$(method)_min_dist.pdf")
 end 
 
 

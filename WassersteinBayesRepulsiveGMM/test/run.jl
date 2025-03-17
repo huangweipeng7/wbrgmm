@@ -44,7 +44,8 @@ function main(kwargs)
 
     @info "Saving the MCMC samples" 
     mkpath("./results/")
-    jldsave("results/$(dataname)_$(method).jld2"; mc_samples)  
+    jldsave("results/$(dataname)_$(method).jld2";
+        g₀, K, β, τ, l_σ2, u_σ2, n_burnin, n_iter, thinning, mc_samples)  
     @info "Process finished" 
 end 
   

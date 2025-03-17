@@ -87,14 +87,20 @@ end
 
     νₙ = k_prior.biw.iw.df + n 
     Ψₙ = Matrix(k_prior.biw.iw.Ψ) + cov_(X) 
-    Ψₙ = round.(Ψₙ, digits=10)
+    Ψₙ = round.(Ψₙ, digits=8)
     biw_p = EigBoundedIW(k_prior.biw.l_σ2, k_prior.biw.u_σ2, νₙ, Ψₙ)
     Σ = rand(biw_p)
 
     Σ₀ = inv(inv(k_prior.smvn.mvn.Σ) + n * inv(Σ))
-    Σ₀ = round.(Σ₀, digits=10)
+    Σ₀ = round.(Σ₀, digits=8)
     μ₀ = Σ₀ * (n * inv(Σ) * x̄) |> vec 
-    μ = MvNormal(μ₀, Σ₀) |> rand 
+    μ = try 
+        MvNormal(μ₀, Σ₀) |> rand 
+    catch LoadError
+        Σ₀ = round.(Σ₀, digits=6); 
+        MvNormal(μ₀, Σ₀) |> rand
+    end 
+    # println(Σ, " ", Σ₀)
 
     return μ, Σ
 end 

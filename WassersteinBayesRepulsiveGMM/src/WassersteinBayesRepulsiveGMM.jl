@@ -1,6 +1,7 @@
 module WassersteinBayesRepulsiveGMM
 
 export wrbgmm_blocked_gibbs, KernelPrior, MCSample
+export mean_dist_gauss, wass_dist_gauss, min_distance 
  
 using Distributions 
 using FStrings
