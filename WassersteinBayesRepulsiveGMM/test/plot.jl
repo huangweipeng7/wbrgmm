@@ -119,7 +119,10 @@ function plot_min_d_all(X, mc_samples_m, mc_samples_w, kwargs)
         DataFrame(x=compute(mc_samples_w), method="Wasserstein"),
     ]
     # Plot 
-    p = plot(vcat(D...), x=:x, color=:method, 
+    p = plot(vcat(D...), 
+        Coord.cartesian(
+            xmin=-1, xmax=9, ymin=0, ymax=0.35),
+        x=:x, color=:method, 
         Theme(alphas=[0.6]), Stat.density, 
         Geom.polygon(fill=true, preserve_order=true),
         Guide.colorkey(title=""), 
