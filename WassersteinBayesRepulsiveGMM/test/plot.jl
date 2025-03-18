@@ -8,6 +8,7 @@ using WassersteinBayesRepulsiveGMM
 
 import Cairo, Compose, Fontconfig
 import ColorSchemes as cs
+import Plots
 
 include("./data.jl"); import .load_data
 include("./parse_args.jl"); import .parse_plot_cmd
@@ -15,6 +16,7 @@ include("./parse_args.jl"); import .parse_plot_cmd
    
 function plot_density_estimate(X, mc_samples, kwargs)
     method = kwargs["method"]
+    dataname = kwargs["dataname"]
 
     # Generate grid
     x_min, x_max = minimum(X[1, :]) - 1, maximum(X[1, :]) + 1
@@ -65,14 +67,15 @@ function plot_density_estimate(X, mc_samples, kwargs)
     logcpo = round(
         mean([mc_sample.llhd for mc_sample in mc_samples]), 
         digits=3)
-    p = scatter(X[1, :], X[2, :],  
+    p = Plots.scatter(X[1, :], X[2, :],  
          markercolor=:white,
         # color=:black, alpha=0.3, 
         markersize=2.5, label="log-CPO: $(logcpo)")
-    contour!(x_grid, y_grid, density_matrix, cmap=:viridis,
+    Plots.contour!(x_grid, y_grid, density_matrix, cmap=:viridis,
         levels=20, linewidth=1, alpha=0.8)
-    title!("Density Estimate by $(rep_type)")
-    xlabel!("X"); ylabel!("Y")
+    Plots.title!("Density Estimate by $(rep_type)")
+    Plots.xlabel!("X")
+    Plots.ylabel!("Y")
 
     # method = uppercase(method[1]) * method[2:end]
     # p = Gadfly.plot(  
@@ -94,7 +97,7 @@ function plot_density_estimate(X, mc_samples, kwargs)
     #     "Density Estimation with $(method) Repulsion", 
     #     Compose.fontsize(17pt))
     println("Finish plotting\n\n\n")
-    savefig(p, "$(dataname)_$(method)_contour.pdf")
+    Plots.savefig(p, "$(dataname)_$(method)_contour.pdf")
 end 
 
 
@@ -120,10 +123,10 @@ function plot_min_d_all(X, mc_samples_m, mc_samples_w, kwargs)
     ]
     # Plot 
     p = plot(vcat(D...), 
-        Coord.cartesian(
-            xmin=-1, xmax=9, ymin=0, ymax=0.35),
+        # Coord.cartesian(
+        #     xmin=-1, xmax=9, ymin=0, ymax=0.35),
         x=:x, color=:method, 
-        Theme(alphas=[0.6]), Stat.density, 
+        Theme(alphas=[0.7]), Stat.density, 
         Geom.polygon(fill=true, preserve_order=true),
         Guide.colorkey(title=""), 
         Guide.title("KDE of minimal mean distance")
@@ -182,7 +185,8 @@ function load_and_plot(kwargs)
     mc_samples_w = mc_sample_dict["mc_samples"]
     
     X = load_data(dataname)
-    # p = plot_density_estimate(X, mc_samples, kwargs)
+    mc_samples = method == "mean" ? mc_samples_m : mc_samples_w 
+    plot_density_estimate(X, mc_samples, kwargs)
     # # draw(PDF("$(dataname)_$(method)_contour.pdf", 6.3inch, 5inch), p) 
     kwargs["g₀"] = mc_sample_dict["g₀"]
 
