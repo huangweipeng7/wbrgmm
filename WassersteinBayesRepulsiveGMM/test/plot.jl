@@ -1,12 +1,12 @@
 using DataFrames
-using Gadfly 
-import Plots, StatsPlots 
+using Gadfly  
+import Plots, StatsPlots  
 using JLD2   
 using MLStyle
 using Distributions, StatsBase, StatsFuns
 using WassersteinBayesRepulsiveGMM 
-
-import PlotlyKaleido
+ 
+import PlotlyKaleido 
 import Cairo, Compose, Fontconfig
 import ColorSchemes as cs
 
@@ -64,41 +64,40 @@ function plot_density_estimate(X, mc_samples, kwargs)
     # Plot
     logcpo = round(
         mean([mc_sample.llhd for mc_sample in mc_samples]), 
-        digits=3)
-    # p = Plots.scatter(X[1, :], X[2, :],  
-    #      markercolor=:white,
-    #     # color=:black, alpha=0.3, 
-    #     markersize=2.5, label="log-CPO: $(logcpo)")
-    # Plots.contour!(x_grid, y_grid, density_matrix, cmap=:viridis,
-    #     levels=20, linewidth=1, alpha=0.8)
-    # Plots.title!("Density Estimate by $(rep_type)")
-    # Plots.xlabel!("X"); Plots.ylabel!("Y")
+        digits=3) 
+    p = Plots.scatter(X[1, :], X[2, :],  
+        markercolor=:white,
+        # color=:black, alpha=0.3, 
+        markersize=2.5, label="log-CPO: $(logcpo)")
+    Plots.contour!(x_grid, y_grid, density_matrix, cmap=:bone,
+        levels=20, linewidth=1, alpha=0.9)
+    Plots.title!("Density Estimate by $(rep_type)")
+    # Plots.xlabel!("X") 
+    # Plots.ylabel!("Y")
 
-    method = uppercase(method[1]) * method[2:end]
-    p = Gadfly.plot(  
-        Coord.cartesian(
-            xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max), 
-        # layer(z=density_matrix, x=x_grid, y=y_grid, alpha=[0.8],
-        #     Geom.contour(levels=15), Theme(minor_label_font_size=16pt)), 
-        layer(z=density_matrix, x=x_grid, y=y_grid, alpha=[0.8], 
-            Geom.contour(levels=20), Theme(minor_label_font_size=16pt)), 
-        layer(x=X[1, :], y=X[2, :], Geom.point, 
-            Theme(
-                default_color="white", 
-                discrete_highlight_color=c->["black"])),
-        Guide.ylabel(nothing), Guide.xlabel(nothing),
-        Theme(key_position=:none),   
-        # Scale.color_discrete(
-        #     n -> get(cs.linear_tritanopic_krjcw_5_98_c46_n256, 
-        #         range(0, 1, length=n)))
-        )
-    p = title(
-        render(p), 
-        "Density Estimation with $(method) Repulsion", 
-        Compose.fontsize(17pt))
+    # method = uppercase(method[1]) * method[2:end]
+    # p = Gadfly.plot(  
+    #     Coord.cartesian(
+    #         xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max), 
+    #     layer(x=X[1, :], y=X[2, :],  
+    #         Theme(
+    #             default_color="white", 
+    #             discrete_highlight_color=c->["black"])),
+    #     layer(z=density_matrix, x=x_grid, y=y_grid,  
+    #         Geom.contour(levels=20), Theme(minor_label_font_size=16pt)), 
+    #     Guide.ylabel(nothing), Guide.xlabel(nothing),
+    #     # Theme(key_position=:none),   
+    #     Scale.color_discrete(
+    #         n -> get(cs.linear_tritanopic_krjcw_5_98_c46_n256, 
+    #             range(0, 1, length=n)))
+    #     )
+    # p = title(
+    #     render(p), 
+    #     "Density Estimation with $(method) Repulsion", 
+    #     Compose.fontsize(17pt))
     println("Finish plotting\n\n\n")
-    draw(PDF("$(dataname)_$(method)_contour", 5inch, 4inch), p) 
-    # Plots.savefig(p, "$(dataname)_$(method)_contour.pdf")
+    # draw(PDF("$(dataname)_$(method)_contour", 6.3inch, 5.1inch), p) 
+    Plots.savefig(p, "$(dataname)_$(method)_contour.pdf") 
 end 
 
 
@@ -138,8 +137,8 @@ function plot_min_d_all(X, mc_samples_m, mc_samples_w, kwargs)
     # ) 
  
     Plots.gr()
-    p = Plots.density(df1.x, label="Mean",
-        color=:black, tickfontsize=14, lw=1.5, top_margin=5Plots.mm,
+    p = Plots.density(df1.x, label="Mean", 
+        color=:black, tickfontsize=12, lw=1.5, top_margin=5Plots.mm, 
         title="Density of minimal mean distance")
     Plots.density!(df2.x, label="Wasserstein", color=:black, lw=1.5,
         linestyle=:dash)
@@ -209,7 +208,7 @@ function load_and_plot(kwargs)
     # # savefig(p, "$(dataname)_$(method)_min_dist.pdf")
     # draw(PDF("$(dataname)_$(method)_min_dist.pdf", 4inch, 3inch), p)
 
-    # plot_min_d_all(X, mc_samples_m, mc_samples_w, kwargs)
+    plot_min_d_all(X, mc_samples_m, mc_samples_w, kwargs)
     # draw(PDF("$(dataname)_$(method)_contour.pdf", 6.3inch, 5inch), p) 
     # savefig(p, "$(dataname)_$(method)_min_dist.pdf")
 end 
