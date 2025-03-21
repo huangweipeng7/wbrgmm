@@ -28,7 +28,7 @@ function main(kwargs)
     ν₀ = kwargs["nu0"]
     β = 1
     θ = 1 
-    l_σ2, u_σ2 = 1e-8, 1e8
+    l_σ2, u_σ2 = 1e-12, 1e12
     K = 1
 
     X = load_data(dataname)

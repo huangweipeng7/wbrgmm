@@ -2,10 +2,10 @@
 set -e
 
 data="a1"
-n_burnin=5000
-n_iter=1000
-tau=10000
-g0=20
+n_burnin=10000
+n_iter=5000
+tau=1e5
+g0=100
 thinning=1
 
 

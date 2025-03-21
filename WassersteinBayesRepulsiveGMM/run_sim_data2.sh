@@ -32,6 +32,7 @@ n_iter=7500
 
 julia -t8 ./test/plot.jl --dataname $data --method mean  
 julia -t8 ./test/plot.jl --dataname $data --method wasserstein  
+julia -t8 ./test/plot.jl --dataname $data --method all
 ########################################	
 
 

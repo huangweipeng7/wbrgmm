@@ -1,12 +1,12 @@
-using DataFrames
+using DataFrames 
 using Gadfly  
-import Plots, StatsPlots  
+import Plots, StatsPlots   
 using JLD2   
 using MLStyle
 using Distributions, StatsBase, StatsFuns
 using WassersteinBayesRepulsiveGMM 
  
-import PlotlyKaleido 
+import PlotlyKaleido   
 import Cairo, Compose, Fontconfig
 import ColorSchemes as cs
 
@@ -15,14 +15,16 @@ include("./parse_args.jl"); import .parse_plot_cmd
  
    
 function plot_density_estimate(X, mc_samples, kwargs)
+    Plots.gr()
+
     dataname = kwargs["dataname"]
     method = kwargs["method"]
 
     # Generate grid
     x_min, x_max = minimum(X[1, :]) - 1, maximum(X[1, :]) + 1
     y_min, y_max = minimum(X[2, :]) - 1, maximum(X[2, :]) + 1
-    x_grid = range(x_min, x_max, length=88)
-    y_grid = range(y_min, y_max, length=88)
+    x_grid = range(x_min, x_max, length=120)
+    y_grid = range(y_min, y_max, length=120) 
     xx = repeat(x_grid', length(y_grid), 1)
     yy = repeat(y_grid, 1, length(x_grid))
     grid_points = hcat(vec(xx), vec(yy)) 
@@ -53,8 +55,7 @@ function plot_density_estimate(X, mc_samples, kwargs)
     end
     density_matrix = reshape(density, (length(y_grid), length(x_grid)))
     println("Finish processing the density estimation computation")
-
-
+ 
     rep_type = @match method begin
         "mean" => "MRGM"
         "wasserstein" => "WRGM"
@@ -68,9 +69,9 @@ function plot_density_estimate(X, mc_samples, kwargs)
     p = Plots.scatter(X[1, :], X[2, :],  
         markercolor=:white,
         # color=:black, alpha=0.3, 
-        markersize=2.5, label="log-CPO: $(logcpo)")
+        markersize=2, label="log-CPO: $(logcpo)")
     Plots.contour!(x_grid, y_grid, density_matrix, cmap=:bone,
-        levels=20, linewidth=1, alpha=0.9)
+        levels=30, linewidth=0.7, alpha=0.9)
     Plots.title!("Density Estimate by $(rep_type)")
     # Plots.xlabel!("X") 
     # Plots.ylabel!("Y")
@@ -95,9 +96,8 @@ function plot_density_estimate(X, mc_samples, kwargs)
     #     render(p), 
     #     "Density Estimation with $(method) Repulsion", 
     #     Compose.fontsize(17pt))
-    println("Finish plotting\n\n\n")
-    # draw(PDF("$(dataname)_$(method)_contour", 6.3inch, 5.1inch), p) 
-    Plots.savefig(p, "$(dataname)_$(method)_contour.pdf") 
+    println("Finish plotting\n\n\n") 
+    Plots.savefig(p, "./plots/$(dataname)_$(method)_contour.pdf") 
 end 
 
 
@@ -135,10 +135,10 @@ function plot_min_d_all(X, mc_samples_m, mc_samples_w, kwargs)
     #     Guide.colorkey(title=""), 
     #     Guide.title("KDE of minimal mean distance"), 
     # ) 
- 
-    Plots.gr()
-    p = Plots.density(df1.x, label="Mean", 
-        color=:black, tickfontsize=12, lw=1.5, top_margin=5Plots.mm, 
+  
+    Plots.plotlyjs()
+    p = Plots.density(df1.x, label="Mean",
+        color=:black, tickfontsize=11, lw=1.5, top_margin=5Plots.mm, 
         title="Density of minimal mean distance")
     Plots.density!(df2.x, label="Wasserstein", color=:black, lw=1.5,
         linestyle=:dash)
@@ -146,8 +146,8 @@ function plot_min_d_all(X, mc_samples_m, mc_samples_w, kwargs)
     dataname = kwargs["dataname"]
     # draw(PDF("$(dataname)_min_dist_kde.pdf", 4inch, 3inch), p) 
     println("Finish plotting\n\n\n") 
-    # PlotlyKaleido.start()
-    Plots.savefig("$(dataname)_min_dist_kde.pdf")
+    PlotlyKaleido.start()
+    Plots.savefig("./plots/$(dataname)_min_dist_kde.pdf")
 end 
 
 
@@ -188,29 +188,24 @@ function load_and_plot(kwargs)
 
     dataname = kwargs["dataname"]
     method = kwargs["method"]
-    
-    mc_sample_dict = JLD2.load(
-        "results/$(dataname)_mean.jld2")   
-    mc_samples_m = mc_sample_dict["mc_samples"]
-
-    mc_sample_dict = JLD2.load(
-        "results/$(dataname)_wasserstein.jld2")   
-    mc_samples_w = mc_sample_dict["mc_samples"]
-    
     X = load_data(dataname)
-    mc_samples = method == "mean" ? mc_samples_m : mc_samples_w
-    plot_density_estimate(X, mc_samples, kwargs)
-    # # draw(PDF("$(dataname)_$(method)_contour.pdf", 6.3inch, 5inch), p) 
-    kwargs["g₀"] = mc_sample_dict["g₀"]
-
-    # p = plot_min_d(X, mc_samples, kwargs)
-    # # draw(PDF("$(dataname)_$(method)_contour.pdf", 6.3inch, 5inch), p) 
-    # # savefig(p, "$(dataname)_$(method)_min_dist.pdf")
-    # draw(PDF("$(dataname)_$(method)_min_dist.pdf", 4inch, 3inch), p)
-
-    plot_min_d_all(X, mc_samples_m, mc_samples_w, kwargs)
-    # draw(PDF("$(dataname)_$(method)_contour.pdf", 6.3inch, 5inch), p) 
-    # savefig(p, "$(dataname)_$(method)_min_dist.pdf")
+    
+    mkpath("./plots/")
+    if method == "all"
+        mc_sample_dict = JLD2.load(
+            "results/$(dataname)_mean.jld2")   
+        mc_samples_m = mc_sample_dict["mc_samples"]
+ 
+        mc_sample_dict = JLD2.load(
+            "results/$(dataname)_wasserstein.jld2")   
+        mc_samples_w = mc_sample_dict["mc_samples"]
+        
+        plot_min_d_all(X, mc_samples_m, mc_samples_w, kwargs)
+    else
+        mc_samples = JLD2.load(
+            "results/$(dataname)_$(method).jld2", "mc_samples") 
+        plot_density_estimate(X, mc_samples, kwargs)
+    end  
 end 
 
 
