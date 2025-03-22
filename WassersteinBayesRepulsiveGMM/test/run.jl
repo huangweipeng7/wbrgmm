@@ -34,11 +34,11 @@ function main(kwargs)
     X = load_data(dataname)
     dim = size(X, 1) 
 
-    prior = KernelPrior(
+    k_prior = KernelPrior(
         τ, zeros(dim), τ^2*I(dim), l_σ2, u_σ2, ν₀, θ^2*I(dim))
 
     mc_samples = wrbgmm_blocked_gibbs(
-        X; g₀=g₀, K=K, β=β, τ=τ, prior=prior, 
+        X; g₀=g₀, K=K, β=β, τ=τ, k_prior=k_prior, 
         t_max=5, method=method, l_σ2=l_σ2, u_σ2=u_σ2, 
         n_burnin=n_burnin, n_iter=n_iter, thinning=thinning)  
 

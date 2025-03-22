@@ -28,24 +28,30 @@ KernelPrior(τ, μ₀, Σ₀, l_σ2, u_σ2, ν₀, Φ₀) = KernelPrior(
     EigBoundedIW(l_σ2, u_σ2, ν₀, round.(Φ₀, digits=10) |> Matrix)) 
 
 
-@inline function rand(biw::EigBoundedIW; max_cnt=2000)  
+clogpdf(prior::KernelPrior, μ, Σ) =
+    logpdf(prior.smvn.mvn, μ) + logpdf(prior.biw.iw, Σ)
+
+
+@inline function rand(biw::EigBoundedIW; max_cnt=2000, approx=true)  
     dim = size(biw.iw.Ψ, 1) 
     
     Σ = zeros(dim, dim)
-    eig_v_Σ = nothing 
+    if !approx
+        eig_v_Σ = nothing 
 
-    l_σ2, u_σ2 = biw.l_σ2, biw.u_σ2
-    @inbounds for c = 1:max_cnt 
+        l_σ2, u_σ2 = biw.l_σ2, biw.u_σ2
+        @inbounds for c = 1:max_cnt 
+            Σ .= rand(biw.iw) 
+            Σ .= round.(Σ, digits=10)    
+            eig_v_Σ = eigvals(Σ)
+            
+            (first(eig_v_Σ) > l_σ2 && last(eig_v_Σ) < u_σ2) && break  
+        end  
+        throw("Sampling from the prior takes too long. 
+            Check if the bounds are set properly")
+    else 
         Σ .= rand(biw.iw) 
-        Σ .= round.(Σ, digits=10)    
-        eig_v_Σ = eigvals(Σ)
-        
-        (first(eig_v_Σ) > l_σ2 && last(eig_v_Σ) < u_σ2) && break  
-        
-        c < max_cnt ||
-            throw("Sampling from the prior takes too long. 
-                   Check if the bounds are set properly")
-    end  
+    end 
     return Σ
 end 
 
@@ -68,8 +74,7 @@ end
         μ, Σ = n == 0 ? 
             rand(k_prior) : 
             post_sample_gauss(Xₖ, Mu[:, :, k], Sig[:, :, k], k_prior)
-        
-        logp += logp_
+         
         Mu[:, k] .= μ[:] 
         Sig[:, :, k] .= Σ[:, :]
     end 

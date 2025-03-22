@@ -3,8 +3,11 @@ set -e
 
 
 data="sim_data_new_4"
-n_burnin=5000
-n_iter=7500
+n_burnin=10000
+n_iter=5000
+tau=100
+g0=5
+nu0=4
 
 julia -t4 ./test/run.jl \
 	--dataname $data \
@@ -12,9 +15,9 @@ julia -t4 ./test/run.jl \
 	--n_burnin $n_burnin \
 	--n_iter $n_iter \
 	--thinning 1 \
-	--tau 100 \
-	--g0 10 \
-	--nu0 4
+	--tau $tau \
+	--g0 $g0 \
+	--nu0 $nu0
 
 # julia -t8 ./test/plot.jl --dataname $data --method mean  
 # # # #########################################
@@ -26,9 +29,9 @@ julia -t4 ./test/run.jl \
 	--n_burnin $n_burnin \
 	--n_iter $n_iter \
 	--thinning 1 \
-	--tau 100	 \
-	--g0 10 \
-	--nu0 4
+	--tau $tau \
+	--g0 $g0 \
+	--nu0 $nu0
 
 julia -t8 ./test/plot.jl --dataname $data --method mean  
 julia -t8 ./test/plot.jl --dataname $data --method wasserstein  

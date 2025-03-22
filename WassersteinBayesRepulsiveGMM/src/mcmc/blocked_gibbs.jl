@@ -4,13 +4,13 @@ struct MCSample
     C::Vector{Real}
     K::Int 
     llhd::Real
-    log_prior::Real
+    lpost::Real
 end 
 
 
 @inline function wrbgmm_blocked_gibbs(
     X; g₀ = 100., β = 1., a₀ = 1., b₀ = 1., τ = 1.,
-    l_σ2 = 0.001, u_σ2 = 10000., prior = nothing, 
+    l_σ2 = 0.001, u_σ2 = 10000., k_prior = nothing, 
     K = 5, t_max = 2, method="wasserstein", 
     n_burnin = 2000, n_iter = 3000, thinning = 1)
 
@@ -32,36 +32,37 @@ end
     C = zeros(Int, n) 
     Mu = zeros(dim, K+1)
     Sig = zeros(dim, dim, K+1)
-    initialize!(X, Mu, Sig, C, config, prior)  
+    initialize!(X, Mu, Sig, C, k_prior, config)  
 
-    n_init_comp::Int = round(n/2)
+    n_init_comp::Int = round(n/8)
     logV = logV_nt(n, β, n_init_comp; λ=1)
-    Zₖ = nothing # numerical_Zₖ(2K, dim, config, prior)
+    Zₖ = numerical_Zₖ(n_init_comp, dim, config, k_prior)
     
     n_runs = n_burnin + n_iter
-    pbar = Progress(n_runs, barglyphs=BarGlyphs("[=> ]"), color=:white)
+    pbar = Progress(n_runs, barglyphs=BarGlyphs("[=> ]"))
     @inbounds for iter in 1:n_runs 
         C, Mu, Sig, llhd = post_sample_C!(
-            X, Mu, Sig, C, logV, Zₖ, config, prior) 
+            X, Mu, Sig, C, logV, Zₖ, k_prior, config) 
 
         C, Mu, Sig, _ = post_sample_K_and_swap_indices(
             X, C, Mu, Sig, Zₖ, t_max; approx=true)  
         
-        min_d = post_sample_repulsive_gauss!(X, Mu, Sig, C, config, prior) 
-        log_prior = log_prior(C, Mu, Sig, min_d)
+        min_d = post_sample_repulsive_gauss!(X, Mu, Sig, C, k_prior, config) 
+        lprior = log_prior(C, Mu, Sig, min_d, Zₖ, k_prior, config)
 
         next!(pbar; 
             showvalues=[
                 (:iter, iter), 
                 (:log_likelihood, round(llhd, digits=3)),
-                (:log_posterior, round(llhd+log_prior, digits=3)) 
+                (:log_prior, round(lprior, digits=3)),
+                (:log_posterior, round(llhd+lprior, digits=3)) 
             ]
         )
 
         if iter > n_burnin && iter % thinning == 0  
             mc_sample = MCSample(
                 deepcopy(Mu), deepcopy(Sig), 
-                deepcopy(C), size(Mu, 2)-1, llhd, log_prior)
+                deepcopy(C), size(Mu, 2)-1, llhd, llhd+lprior)
             push!(mc_samples, mc_sample)
         end 
     end 
@@ -69,28 +70,30 @@ end
 end 
 
 
-function log_prior(C, Mu, Sig, min_d, config)   
+function log_prior(C, Mu, Sig, min_d, Zₖ, k_prior, config)   
     logp = 0.
 
     K = size(Mu, 2)
     logp += logpdf(Poisson(1), K)
 
-    w = zeros(K)
-    for c in C
-        w[c] += 1
-    end 
-    w[end] = config["β"]
-    w = w ./ sum(w)
-    logp += logpdf(Dirichlet(K, config["β"]), w) 
+    if config["β"] != 1
+        w = zeros(K)
+        for c in C
+            w[c] += 1
+        end 
+        w[end] = config["β"]
+        w = w ./ sum(w)
+        logp += logpdf(Dirichlet(K, config["β"]), w)
+    end  
 
     for k in 1:K
-        logp += logpdf(prior, Mu[:, k], Sig[:, :, k])
+        logp += clogpdf(k_prior, Mu[:, k], Sig[:, :, k])
     end 
-    logp += - logV[K] + log(min_d) 
+    logp += - Zₖ[K] + log(min_d) 
 end 
 
 
-@inline function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, config, prior) 
+@inline function post_sample_C!(X, Mu, Sig, C, logV, Zₖ, k_prior, config) 
 
     size(Mu, 2) == size(Sig, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions.")) 
@@ -119,7 +122,7 @@ end
         # K plus 1
         Kp1 = size(Mu_, 2)  
 
-        sample_repulsive_gauss!(X, Mu_, Sig_, ℓ, config, prior)
+        sample_repulsive_gauss!(X, Mu_, Sig_, ℓ, config, k_prior)
  
         # resize the vectors for loglikelihood of data and the corresponding coefficients
         resize!(lp, Kp1) 
@@ -202,7 +205,7 @@ end
     ℓ + gumbel_max_sample(log_p_K .+ Ẑ .- Zₖ[ℓ:ℓ+t_max-1]) - 1
  
 
-@inline function post_sample_repulsive_gauss!(X, Mu, Sig, C, config, k_prior)
+@inline function post_sample_repulsive_gauss!(X, Mu, Sig, C, k_prior, config)
     min_d = 0.              # min wasserstein distance
     g₀, method = config["g₀"], config["method"]
     while rand() > min_d 
@@ -213,13 +216,13 @@ end
 end 
  
 
-@inline function initialize!(X, Mu, Sig, C, config, prior) 
+@inline function initialize!(X, Mu, Sig, C, k_prior, config) 
     size(Mu, 2) == size(Sig, 3) ||
         throw(DimensionMismatch("Inconsistent array dimensions."))
     
     K = size(Mu, 2)
 
-    sample_repulsive_gauss!(X, Mu, Sig, 0, config, prior)
+    sample_repulsive_gauss!(X, Mu, Sig, 0, config, k_prior)
 
     # Inner functions: Assign the component index to each 
     # observation according to their max log-likelihoods
@@ -242,7 +245,7 @@ end
     min_d = 0.     # min wasserstein distance 
     while rand() > min_d   
         @inbounds for k in ℓ+1:K 
-            μ, Σ = crand(k_prior)
+            μ, Σ = rand(k_prior)
             Mu[:, k] .= μ
             Sig[:, :, k] .= Σ 
         end 
