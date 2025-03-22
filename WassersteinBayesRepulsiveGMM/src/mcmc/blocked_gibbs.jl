@@ -4,6 +4,7 @@ struct MCSample
     C::Vector{Real}
     K::Int 
     llhd::Real
+    log_prior::Real
 end 
 
 
@@ -40,14 +41,15 @@ end
     n_runs = n_burnin + n_iter
     pbar = Progress(n_runs, barglyphs=BarGlyphs("[=> ]"), color=:white)
     @inbounds for iter in 1:n_runs 
-        C, Mu, Sig, llhd = post_sample_C!(
+        C, Mu, Sig, llhd, logp_C = post_sample_C!(
             X, Mu, Sig, C, logV, Zₖ, config, prior) 
 
-        C, Mu, Sig, _ = post_sample_K_and_swap_indices(
+        C, Mu, Sig, _, logp_K = post_sample_K_and_swap_indices(
             X, C, Mu, Sig, Zₖ, t_max; approx=true)  
         
-        post_sample_repulsive_gauss!(X, Mu, Sig, C, config, prior) 
- 
+        logp_G = post_sample_repulsive_gauss!(X, Mu, Sig, C, config, prior) 
+        log_prior = logp_C + logp_K + logp_G
+
         next!(pbar; 
             showvalues=[
                 (:iter, iter), (:loglikelihood, round(llhd, digits=3))])
@@ -55,7 +57,7 @@ end
         if iter > n_burnin && iter % thinning == 0  
             mc_sample = MCSample(
                 deepcopy(Mu), deepcopy(Sig), 
-                deepcopy(C), size(Mu, 2)-1, llhd)
+                deepcopy(C), size(Mu, 2)-1, llhd, log_prior)
             push!(mc_samples, mc_sample)
         end
 
@@ -79,7 +81,7 @@ end
  
     lp = Vector()
     lc = Vector()
-    llhd = 0.  
+    llhd, logp = 0., 0.
     for i = 1:n 
        @inbounds x = X[:, i] 
 
@@ -107,8 +109,9 @@ end
         Mu, Sig = Mu_, Sig_ 
         C[i] = gumbel_max_sample(lp .+ lc)
         llhd += lp[C[i]] 
+        logp += lc[C[i]]
     end  
-    return C, Mu, Sig, llhd
+    return C, Mu, Sig, llhd, logp
 end   
 
 
@@ -126,8 +129,10 @@ end
 
     # Sample K  
     log_p_K = log_prob_K(ℓ, t_max, n)
+    logp = 0.0
     if approx 
-        K = sample_K(log_p_K, ℓ, t_max, n) 
+        K = sample_K(log_p_K, ℓ) 
+        logp = log_p_K[K+1-ℓ]
     else
         Zₖ != nothing || 
             throw("In the non-approximation version, X cannot be nothing.")
@@ -153,7 +158,7 @@ end
     @inbounds for (i_nz, nz_k_ind) in enumerate(nz_k_inds)
         C_[C .== nz_k_ind] .= i_nz
     end   
-    return C_, Mu_, Sig_, ℓ  
+    return C_, Mu_, Sig_, ℓ, logp 
 end 
 
 
@@ -169,7 +174,7 @@ end
 end 
 
 
-@inline sample_K(log_p_K, ℓ, t_max, n) = 
+@inline sample_K(log_p_K, ℓ) = 
     ℓ + gumbel_max_sample(log_p_K) - 1
 
 
@@ -180,13 +185,12 @@ end
 @inline function post_sample_repulsive_gauss!(X, Mu, Sig, C, config, k_prior)
     min_d = 0.              # min wasserstein distance
     g₀, method = config["g₀"], config["method"]
+    logp = 0.0
     while rand() > min_d 
-        post_sample_gauss!(X, Mu, Sig, C, k_prior)
+        logp = post_sample_gauss!(X, Mu, Sig, C, k_prior)
         min_d = min_distance(Mu, Sig, g₀, method) 
     end 
-    # println(min_d)
-    # display(Mu)
-    # println()
+    return log(min_d) + logp
 end 
  
 
@@ -219,23 +223,11 @@ end
     min_d = 0.     # min wasserstein distance 
     while rand() > min_d   
         @inbounds for k in ℓ+1:K 
-            μ, Σ = rand(k_prior)
+            μ, Σ = crand(k_prior)
             Mu[:, k] .= μ
             Sig[:, :, k] .= Σ 
         end 
         min_d = min_distance(Mu, Sig, g₀, method) 
-    end 
-    # println("...", min_d)
-    # display(Mu)
-    # println()
-end 
-
-
-@inline function sample_gauss!(X, Mu, Sig, ℓ, config, k_prior) 
-    K = size(Mu, 2) 
-    @inbounds for k in ℓ+1:K 
-        μ, Σ = rand(k_prior)
-        Mu[:, k] .= μ
-        Sig[:, :, k] .= Σ 
-    end 
+    end  
+    return min_d
 end 
