@@ -31,11 +31,8 @@ function min_distance(Mu, Sig, g₀, method)
     indices = filter(c -> c[1] < c[2], CartesianIndices((1:K, 1:K)))
     Threads.@threads for (i, j) in Tuple.(indices)
         @inbounds d = dist_fn(
-            Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])  
-        # println(f" d: {d}, final {d/(d+g₀)}")
-        # hₖ = min(hₖ, d / (d + g₀))
+            Mu[:, i], Sig[:, :, i], Mu[:, j], Sig[:, :, j])   
         d_mat[i, j] = d / (d + g₀) 
-    end  
-    # println("hₖ: $(minimum(d_mat))")
+    end   
     return minimum(d_mat)
 end 

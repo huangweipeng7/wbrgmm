@@ -70,7 +70,9 @@ function plot_density_estimate(X, mc_samples, kwargs)
         markercolor=:white,
         # color=:black, alpha=0.3, 
         markersize=2, label="log-CPO: $(logcpo)")
-    Plots.contour!(x_grid, y_grid, density_matrix, cmap=:bone,
+    Plots.contour!(
+        x_grid, y_grid, density_matrix, 
+        cmap=:linear_tritanopic_krjcw_5_98_c46_n256,
         levels=30, linewidth=0.7, alpha=0.9)
     Plots.title!("Density Estimate by $(rep_type)")
     # Plots.xlabel!("X") 

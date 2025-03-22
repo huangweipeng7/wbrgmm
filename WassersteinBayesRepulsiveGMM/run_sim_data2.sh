@@ -6,29 +6,29 @@ data="sim_data_new_4"
 n_burnin=5000
 n_iter=7500
 
-# julia -t4 ./test/run.jl \
-# 	--dataname $data \
-# 	--method mean \
-# 	--n_burnin $n_burnin \
-# 	--n_iter $n_iter \
-# 	--thinning 1 \
-# 	--tau 100 \
-# 	--g0 10 \
-# 	--nu0 4
+julia -t4 ./test/run.jl \
+	--dataname $data \
+	--method mean \
+	--n_burnin $n_burnin \
+	--n_iter $n_iter \
+	--thinning 1 \
+	--tau 100 \
+	--g0 10 \
+	--nu0 4
 
-# # julia -t8 ./test/plot.jl --dataname $data --method mean  
-# # # # #########################################
+# julia -t8 ./test/plot.jl --dataname $data --method mean  
+# # # #########################################
 
 
-# julia -t4 ./test/run.jl \
-# 	--dataname $data \
-# 	--method wasserstein \
-# 	--n_burnin $n_burnin \
-# 	--n_iter $n_iter \
-# 	--thinning 1 \
-# 	--tau 100	 \
-# 	--g0 10 \
-# 	--nu0 4
+julia -t4 ./test/run.jl \
+	--dataname $data \
+	--method wasserstein \
+	--n_burnin $n_burnin \
+	--n_iter $n_iter \
+	--thinning 1 \
+	--tau 100	 \
+	--g0 10 \
+	--nu0 4
 
 julia -t8 ./test/plot.jl --dataname $data --method mean  
 julia -t8 ./test/plot.jl --dataname $data --method wasserstein  

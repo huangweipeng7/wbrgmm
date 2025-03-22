@@ -50,11 +50,10 @@ KernelPrior(τ, μ₀, Σ₀, l_σ2, u_σ2, ν₀, Φ₀) = KernelPrior(
 end 
 
 
-function crand(prior::KernelPrior; max_cnt=2000)  
+function rand(prior::KernelPrior; max_cnt=2000)  
     Σ = rand(prior.biw; max_cnt=max_cnt)
-    μ = rand(prior.smvn.mvn)  
-    logp = logpdf(prior.biw.iw, Σ) + logpdf(prior.smvn.mvn, μ) 
-    return μ, Σ, logp
+    μ = rand(prior.smvn.mvn)   
+    return μ, Σ
 end 
 
 
@@ -62,20 +61,18 @@ end
     X, Mu, Sig, C, k_prior::KernelPrior)
 
     K = size(Mu, 2)
-    logp = 0.0
     @inbounds for k in 1:K
         Xₖ = X[:, C .== k] 
         n = size(Xₖ, 2)  
         
-        μ, Σ, logp_ = n == 0 ? 
-            crand(k_prior) : 
+        μ, Σ = n == 0 ? 
+            rand(k_prior) : 
             post_sample_gauss(Xₖ, Mu[:, :, k], Sig[:, :, k], k_prior)
         
         logp += logp_
         Mu[:, k] .= μ[:] 
         Sig[:, :, k] .= Σ[:, :]
     end 
-    return logp
 end 
 
 
@@ -106,8 +103,6 @@ end
         MvNormal(μ₀, Σ₀)  
     end 
     μ = rand(normal)
-    
-    logp = logpdf(biw_p.iw, Σ) + logpdf(normal, μ)
 
-    return μ, Σ, logp
+    return μ, Σ
 end 
