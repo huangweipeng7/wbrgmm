@@ -36,7 +36,9 @@ end
 
     n_init_comp::Int = round(n/8)
     logV = logV_nt(n, β, n_init_comp; λ=1)
-    Zₖ = numerical_Zₖ(n_init_comp, dim, config, k_prior)
+    Zₖ = method != "no" ?
+        numerical_Zₖ(n_init_comp, dim, config, k_prior) :
+        ones(n_init_comp)
     
     n_runs = n_burnin + n_iter
     pbar = Progress(n_runs, barglyphs=BarGlyphs("[=> ]"))
