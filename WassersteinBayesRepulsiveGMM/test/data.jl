@@ -13,7 +13,7 @@ function load_data(dataname)
         df_ = df_[!, [:CD4, :CD8]]
     else 
         df_ = df[!, 1:2]
-    end 
+    end  
 
     return df_ |> Matrix |> transpose 
 end  

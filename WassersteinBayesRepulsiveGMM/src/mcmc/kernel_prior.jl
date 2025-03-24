@@ -1,20 +1,22 @@
-mutable struct ScaleMvNormal
+abstract type KernelPrior end 
+
+struct WGRMPrior <: KernelPrior
+    dim::Int
+    smvn::ScaleMvNormal
+    biw::EigBoundedIW
+end 
+
+
+struct ScaleMvNormal
     τ::Float64
     mvn::MvNormal
 end 
 
 
-mutable struct EigBoundedIW
+struct EigBoundedIW
     l_σ2::Float64
     u_σ2::Float64
     iw::InverseWishart 
-end 
-
-
-mutable struct KernelPrior
-    dim::Int
-    smvn::ScaleMvNormal
-    biw::EigBoundedIW
 end 
 
 
@@ -56,7 +58,7 @@ clogpdf(prior::KernelPrior, μ, Σ) =
 end 
 
 
-function rand(prior::KernelPrior; max_cnt=2000)  
+function rand(prior::WGRMPrior; max_cnt=2000)  
     Σ = rand(prior.biw; max_cnt=max_cnt)
     μ = rand(prior.smvn.mvn)   
     return μ, Σ
@@ -64,7 +66,7 @@ end
 
 
 @inline function post_sample_gauss!(
-    X, Mu, Sig, C, k_prior::KernelPrior)
+    X, Mu, Sig, C, k_prior::WGRMPrior)
 
     K = size(Mu, 2)
     @inbounds for k in 1:K
@@ -81,7 +83,7 @@ end
 end 
 
 
-@inline function post_sample_gauss(X, μ, Σ, k_prior::KernelPrior)
+@inline function post_sample_gauss(X, μ, Σ, k_prior::WGRMPrior)
     """ A function for the posterior sampling of Gaussian kernels.
         μ is currently not in use.
     """
@@ -110,4 +112,84 @@ end
     μ = rand(normal)
 
     return μ, Σ
+end 
+
+
+##################################################
+
+struct BGRMPrior <: KernelPrior
+    dim::Int
+    a::Real
+    b::Vector{Real}
+    l_σ2::Real
+    u_σ2::Real
+    τ::Real
+end 
+
+
+function rand(prior::BGRMPrior; max_cnt=2000)  
+    Σ = randn(prior.dim) * prior.τ
+    μ = rand_inv_gamma(prior)   
+    return μ, Σ
+end 
+
+
+function post_sample_gauss_kernels_mc(X, ℓ, t_max, Mu, Sig, C, config::Dict; n_mc=20) 
+    g₀ = config["g₀"] 
+    a₀ = config["a₀"] 
+    b₀ = config["b₀"]
+    τ = config["τ"]
+
+    dim = size(Mu, 1)  
+    K = ℓ + t_max - 1
+    Mu_mc = zeros(Float64, dim, K, n_mc)
+    Sig_mc = zeros(Float64, dim, dim, K, n_mc)
+    
+    normal = MvNormal(zeros(dim), τ^2) 
+    @inbounds for k in 1:K
+        X_tmp = X[:, C.==k] 
+        n = size(X_tmp, 2) 
+
+        if n == 0 
+            @inbounds Mu_mc[:, k, :] .= rand(normal, n_mc)
+            for mc = 1:n_mc
+                @inbounds Sig_mc[:, :, k, mc] .= rand_inv_gamma(a₀, b₀, config)
+            end
+        else
+            x_sum = sum(X_tmp; dims=2)  
+            Σ₀ = inv(τ^2*I + n * inv(Sig[:, :, k]))
+            μ₀ = Σ₀ * (inv(Sig[:, :, k]) * x_sum) |> vec 
+            Mu_mc[:, k, :] .= rand(MvNormal(μ₀, Σ₀), n_mc)
+
+            aₖ = a₀ + n / 2 
+            bₖ = b₀ .+ sum((X_tmp .- Mu[:, k]).^2; dims=2) / 2 |> vec
+            Sig_mc[:, :, k, :] .= rand_inv_gamma(aₖ, bₖ, config; n=n_mc) 
+        end  
+    end 
+    return Mu_mc, Sig_mc
+end 
+
+
+function rand_inv_gamma(prior::BGRMPrior; n=1) 
+    dim = prior.dim
+    l_σ2 = prior.l_σ2
+    u_σ2 = prior.u_σ2
+    a = prior.a 
+    b = prior.b 
+
+    Λ = n == 1 ? Diagonal(zeros(Float64, dim)) : zeros(Float64, dim, dim, n) 
+    @inbounds for p in 1:dim
+        if n == 1
+            # Using gamma to sample inverse gamma R.V. is always more robust in Julia
+            σ2 = truncated(Gamma(a, 1/bb[p]), 1/u_σ2, 1/l_σ2) |> rand 
+            @assert σ2 > 0
+            Λ[p, p] = 1 / σ2
+        else 
+            # Using gamma to sample inverse gamma R.V. is always more robust in Julia
+            σ2 = rand(truncated(Gamma(a, 1/bb[p]), 1/u_σ2, 1/l_σ2), n) 
+            @assert all(σ2 .> 0)
+            Λ[p, p, :] .= 1 ./ σ2
+        end  
+    end  
+    return Λ
 end 

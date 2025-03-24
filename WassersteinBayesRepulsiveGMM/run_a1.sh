@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-data="a1"
-n_burnin=10000
-n_iter=5000
+data="a1" 
+n_burnin=300
+n_iter=300 
 tau=1e5
 g0=100
 thinning=1
@@ -31,7 +31,7 @@ julia -t4 ./test/run.jl \
 	--thinning $thinning \
 	--tau $tau \
 	--g0 $g0 \
-	--nu0 4 
+	--nu0 4
 
 julia -t8 ./test/plot.jl --dataname $data --method wasserstein  
 ########################################

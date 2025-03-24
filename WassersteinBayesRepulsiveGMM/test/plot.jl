@@ -68,12 +68,13 @@ function plot_density_estimate(X, mc_samples, kwargs)
         digits=3) 
     p = Plots.scatter(X[1, :], X[2, :],  
         markercolor=:white,
-        # color=:black, alpha=0.3, 
+        # color=:black, alpha=0.3,  
         markersize=2, label="log-CPO: $(logcpo)")
     Plots.contour!(
         x_grid, y_grid, density_matrix, 
         cmap=:linear_tritanopic_krjcw_5_98_c46_n256,
         levels=30, linewidth=0.7, alpha=0.9)
+ 
     Plots.title!("Density Estimate by $(rep_type)")
     # Plots.xlabel!("X") 
     # Plots.ylabel!("Y")
@@ -191,23 +192,41 @@ function load_and_plot(kwargs)
     dataname = kwargs["dataname"]
     method = kwargs["method"]
     X = load_data(dataname)
+<<<<<<< Updated upstream
     
     mkpath("./plots/")
+=======
+        
+>>>>>>> Stashed changes
     if method == "all"
         mc_sample_dict = JLD2.load(
             "results/$(dataname)_mean.jld2")   
         mc_samples_m = mc_sample_dict["mc_samples"]
+<<<<<<< Updated upstream
  
+=======
+
+>>>>>>> Stashed changes
         mc_sample_dict = JLD2.load(
             "results/$(dataname)_wasserstein.jld2")   
         mc_samples_w = mc_sample_dict["mc_samples"]
         
         plot_min_d_all(X, mc_samples_m, mc_samples_w, kwargs)
+<<<<<<< Updated upstream
     else
         mc_samples = JLD2.load(
             "results/$(dataname)_$(method).jld2", "mc_samples") 
         plot_density_estimate(X, mc_samples, kwargs)
     end  
+=======
+    else 
+        mc_sample_dict = JLD2.load(
+            "results/$(dataname)_$(method).jld2")   
+        mc_samples = mc_sample_dict["mc_samples"]
+
+        plot_density_estimate(X, mc_samples, kwargs)
+    end
+>>>>>>> Stashed changes
 end 
 
 
