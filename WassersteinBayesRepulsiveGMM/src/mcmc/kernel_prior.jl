@@ -21,13 +21,6 @@ end
 
 ############################################################ 
 
-struct WGRMPrior <: KernelPrior
-    dim::Int
-    smvn::ScaleMvNormal
-    biw::EigBoundedIW
-end 
-
-
 struct ScaleMvNormal
     τ::Float64
     mvn::MvNormal
@@ -41,17 +34,24 @@ struct EigBoundedIW
 end 
 
 
+struct WRGMPrior <: KernelPrior
+    dim::Int
+    smvn::ScaleMvNormal
+    biw::EigBoundedIW
+end 
+
+
 EigBoundedIW(l_σ2, u_σ2, ν₀, Φ₀) = EigBoundedIW(
     l_σ2, u_σ2, InverseWishart(ν₀, round.(Φ₀, digits=10) |> Matrix))
 
 
-KernelPrior(τ, μ₀, Σ₀, l_σ2, u_σ2, ν₀, Φ₀) = KernelPrior(
+WRGMPrior(τ, μ₀, Σ₀, l_σ2, u_σ2, ν₀, Φ₀) = WRGMPrior(
     size(μ₀, 1), 
     ScaleMvNormal(τ, MvNormal(μ₀, Σ₀)), 
     EigBoundedIW(l_σ2, u_σ2, ν₀, round.(Φ₀, digits=10) |> Matrix)) 
 
 
-clogpdf(prior::KernelPrior, μ, Σ) =
+clogpdf(prior::WRGMPrior, μ, Σ) =
     logpdf(prior.smvn.mvn, μ) + logpdf(prior.biw.iw, Σ)
 
 
@@ -79,7 +79,7 @@ clogpdf(prior::KernelPrior, μ, Σ) =
 end 
 
 
-function rand(prior::WGRMPrior; max_cnt=2000)  
+function rand(prior::WRGMPrior; max_cnt=2000)  
     Σ = rand(prior.biw; max_cnt=max_cnt)
     μ = rand(prior.smvn.mvn)   
     return μ, Σ
@@ -87,7 +87,7 @@ end
 
 
 
-@inline function post_sample_gauss(X, μ, Σ, k_prior::WGRMPrior)
+@inline function post_sample_gauss(X, μ, Σ, k_prior::WRGMPrior)
     """ A function for the posterior sampling of Gaussian kernels.
         μ is currently not in use.
     """
@@ -121,7 +121,7 @@ end
 
 ##################################################
 
-struct BGRMPrior <: KernelPrior
+mutable struct BRGMPrior <: KernelPrior
     dim::Int
     a::Real
     b::Vector{Real}
@@ -130,49 +130,58 @@ struct BGRMPrior <: KernelPrior
     τ::Real
 end 
 
+BRGMPrior(dim, a, b::Real, l_σ2, u_σ2, τ) = 
+    BRGMPrior(dim, a, fill(b, dim), l_σ2, u_σ2, τ)
 
-function rand(prior::BGRMPrior; max_cnt=2000)  
-    Σ = randn(prior.dim) * prior.τ
-    μ = rand_inv_gamma(prior)   
+
+function rand(k_prior::BRGMPrior)  
+    μ = randn(k_prior.dim) * k_prior.τ
+    Σ = rand_inv_gamma(k_prior)   
     return μ, Σ
 end 
 
 
-function post_sample_gauss(X, μ, Σ, k_prior::BGRMPrior)
+clogpdf(k_prior::BRGMPrior, μ, Σ) =
+    logpdf(MvNormal(zeros(k_prior.dim), k_prior.τ^2*I(k_prior.dim)), μ) +
+    sum(logpdf(InverseGamma(k_prior.a, k_prior.b[i]), Σ[i, i]) for i in 1:k_prior.dim)
+
+
+function post_sample_gauss(X, μ, Σ, k_prior::BRGMPrior)
     dim, n = size(X)
-    
+    τ = k_prior.τ
+
     x_sum = sum(X; dims=2)  
     Σ₀ = inv(τ^(-2)*I + n * inv(Σ))
     μ₀ = Σ₀ * (inv(Σ) * x_sum) |> vec 
-    μ = rand(MvNormal(μ₀, Σ₀), n_mc)
+    μ = rand(MvNormal(μ₀, Σ₀))
 
     aₖ = k_prior.a + n / 2 
     bₖ = (k_prior.b .+ sum((X .- μ).^2; dims=2) / 2) |> vec
-    prior_p = deepcopy(prior)
+    prior_p = deepcopy(k_prior)
     prior_p.a, prior_p.b = aₖ, bₖ
-    Σ = rand_inv_gamma(prior_p; n=n_mc) 
+    Σ = rand_inv_gamma(prior_p) 
 
     return μ, Σ
 end 
 
 
-function rand_inv_gamma(prior::BGRMPrior; n=1) 
-    dim = prior.dim
-    l_σ2 = prior.l_σ2
-    u_σ2 = prior.u_σ2
-    a = prior.a 
-    b = prior.b 
+function rand_inv_gamma(k_prior::BRGMPrior; n=1) 
+    dim = k_prior.dim
+    l_σ2 = k_prior.l_σ2
+    u_σ2 = k_prior.u_σ2
+    a = k_prior.a 
+    b = k_prior.b 
 
     Λ = n == 1 ? Diagonal(zeros(Float64, dim)) : zeros(Float64, dim, dim, n) 
     @inbounds for p in 1:dim
         if n == 1
             # Using gamma to sample inverse gamma R.V. is always more robust in Julia
-            σ2 = truncated(Gamma(a, 1/bb[p]), 1/u_σ2, 1/l_σ2) |> rand 
+            σ2 = truncated(Gamma(a, 1/b[p]), 1/u_σ2, 1/l_σ2) |> rand 
             @assert σ2 > 0
             Λ[p, p] = 1 / σ2
         else 
             # Using gamma to sample inverse gamma R.V. is always more robust in Julia
-            σ2 = rand(truncated(Gamma(a, 1/bb[p]), 1/u_σ2, 1/l_σ2), n) 
+            σ2 = rand(truncated(Gamma(a, 1/b[p]), 1/u_σ2, 1/l_σ2), n) 
             @assert all(σ2 .> 0)
             Λ[p, p, :] .= 1 ./ σ2
         end  

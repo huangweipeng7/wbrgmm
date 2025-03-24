@@ -1,6 +1,7 @@
 module WassersteinBayesRepulsiveGMM
 
-export wrbgmm_blocked_gibbs, KernelPrior, MCSample
+export wrbgmm_blocked_gibbs, MCSample
+export KernelPrior, BRGMPrior, WRGMPrior
 export mean_dist_gauss, wass_dist_gauss, min_distance 
  
 using Distributions 
@@ -30,6 +31,6 @@ logpdf = Distributions.logpdf
 
 const GUMBEL = Gumbel(0, 1)
 
-gumbel_max_sample(logits) = argmax(logits + rand(GUMBEL, length(logits))) 
+rand_categorical(logits) = argmax(logits + rand(GUMBEL, length(logits))) 
 
 end # module WassersteinBayesRepulsiveGMM

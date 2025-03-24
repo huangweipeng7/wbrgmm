@@ -57,9 +57,10 @@ function plot_density_estimate(X, mc_samples, kwargs)
     println("Finish processing the density estimation computation")
  
     rep_type = @match method begin
-        "mean" => "MRGM"
-        "wasserstein" => "WRGM"
-        "no" => "DPGM"
+        "mean"          => "MRGM"
+        "brgm"          => "BRGM"
+        "wasserstein"   => "WRGM"
+        "no"            => "DPGM"
     end 
 
     # Plot
@@ -159,9 +160,9 @@ function plot_min_d(X, mc_samples, kwargs)
     method = kwargs["method"]
 
     rep_type = @match method begin
-        "mean" => "MRGM"
-        "wasserstein" => "WRGM"
-        "no" => "DPGM"
+        "mean" || "brgm"    => "MRGM"
+        "wasserstein"       => "WRGM"
+        "no"                => "DPGM"
     end 
 
     min_d_vec = zeros(length(mc_samples))
@@ -191,42 +192,25 @@ function load_and_plot(kwargs)
 
     dataname = kwargs["dataname"]
     method = kwargs["method"]
-    X = load_data(dataname)
-<<<<<<< Updated upstream
+    X = load_data(dataname) 
     
-    mkpath("./plots/")
-=======
-        
->>>>>>> Stashed changes
+    mkpath("./plots/") 
+         
     if method == "all"
         mc_sample_dict = JLD2.load(
             "results/$(dataname)_mean.jld2")   
-        mc_samples_m = mc_sample_dict["mc_samples"]
-<<<<<<< Updated upstream
- 
-=======
+        mc_samples_m = mc_sample_dict["mc_samples"] 
 
->>>>>>> Stashed changes
         mc_sample_dict = JLD2.load(
             "results/$(dataname)_wasserstein.jld2")   
         mc_samples_w = mc_sample_dict["mc_samples"]
         
-        plot_min_d_all(X, mc_samples_m, mc_samples_w, kwargs)
-<<<<<<< Updated upstream
+        plot_min_d_all(X, mc_samples_m, mc_samples_w, kwargs) 
     else
         mc_samples = JLD2.load(
             "results/$(dataname)_$(method).jld2", "mc_samples") 
         plot_density_estimate(X, mc_samples, kwargs)
-    end  
-=======
-    else 
-        mc_sample_dict = JLD2.load(
-            "results/$(dataname)_$(method).jld2")   
-        mc_samples = mc_sample_dict["mc_samples"]
-
-        plot_density_estimate(X, mc_samples, kwargs)
-    end
->>>>>>> Stashed changes
+    end   
 end 
 
 

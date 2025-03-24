@@ -9,17 +9,16 @@
     μ_mc = zeros(dim, K_max, n_mc)
     Σ_mc = zeros(dim, dim, K_max, n_mc)
      
-    Threads.@threads for n = 1:n_mc
-        for k = 1:K_max
-            μ, Σ = rand(k_prior)
-            μ_mc[:, k, n] .= μ
-            Σ_mc[:, :, k, n] .= Σ
-        end 
+    indices = CartesianIndices((1:K_max, 1:n_mc))
+    Threads.@threads for (k, n) in Tuple.(indices) 
+        μ, Σ = rand(k_prior)
+        μ_mc[:, k, n] .= μ
+        Σ_mc[:, :, k, n] .= Σ 
     end 
 
     dist_fn = @match method begin 
-        "wasserstein" => wass_dist_gauss 
-        "mean"        => mean_dist_gauss 
+        "wasserstein"       => wass_dist_gauss 
+        "mean" || "brgm"    => mean_dist_gauss 
     end  
 
     gg = zeros(K_max, n_mc) 

@@ -9,6 +9,19 @@ tau=100
 g0=5
 nu0=4
 
+
+julia -t8 ./test/run.jl \
+	--dataname $data \
+	--method brgm \
+	--n_burnin $n_burnin \
+	--n_iter $n_iter \
+	--thinning 1 \
+	--tau $tau \
+	--g0 $g0 \
+	--nu0 $nu0
+julia -t8 ./test/plot.jl --dataname $data --method brgm  
+
+
 julia -t4 ./test/run.jl \
 	--dataname $data \
 	--method mean \

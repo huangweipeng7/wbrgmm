@@ -16,7 +16,7 @@ end
 
     if method == "no" && g₀ ≠ 0
         g₀ = 0. 
-        @warn "For a non-repulsion method setting, g₀ has to be 1. 
+        @warn "For a non-repulsion method setting, g₀ has to be 0. 
             Automatic change to g₀ has been done!" 
     end 
 
@@ -34,7 +34,7 @@ end
     Sig = zeros(dim, dim, K+1)
     initialize!(X, Mu, Sig, C, k_prior, config)  
 
-    n_init_comp::Int = round(n/8)
+    n_init_comp::Int = min(round(n/8), 20)
     logV = logV_nt(n, β, n_init_comp; λ=1)
     Zₖ = method != "no" ?
         numerical_Zₖ(n_init_comp, dim, config, k_prior) :
@@ -135,7 +135,7 @@ end
             lc[k] = k != Kp1 ? log(n_k + β) : logβ + logV[ℓ+1] - logV[ℓ]  
         end
         Mu, Sig = Mu_, Sig_ 
-        C[i] = gumbel_max_sample(lp .+ lc)
+        C[i] = rand_categorical(lp .+ lc)
         llhd += lp[C[i]]  
     end  
     return C, Mu, Sig, llhd 
@@ -200,11 +200,11 @@ end
 
 
 @inline sample_K(log_p_K, ℓ) = 
-    ℓ + gumbel_max_sample(log_p_K) - 1
+    ℓ + rand_categorical(log_p_K) - 1
 
 
 @inline post_sample_K(log_p_K, Ẑ, Zₖ, ℓ, t_max) = 
-    ℓ + gumbel_max_sample(log_p_K .+ Ẑ .- Zₖ[ℓ:ℓ+t_max-1]) - 1
+    ℓ + rand_categorical(log_p_K .+ Ẑ .- Zₖ[ℓ:ℓ+t_max-1]) - 1
  
 
 @inline function post_sample_repulsive_gauss!(X, Mu, Sig, C, k_prior, config)

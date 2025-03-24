@@ -30,12 +30,18 @@ function main(kwargs)
     θ = 1 
     l_σ2, u_σ2 = 1e-12, 1e12
     K = 1
+    a = 1
+    b = 1
 
     X = load_data(dataname)
     dim = size(X, 1) 
 
-    k_prior = KernelPrior(
-        τ, zeros(dim), τ^2*I(dim), l_σ2, u_σ2, ν₀, θ^2*I(dim))
+    if method != "brgm"
+        k_prior = WassersteinBayesRepulsiveGMM.WRGMPrior(
+            τ, zeros(dim), τ^2*I(dim), l_σ2, u_σ2, ν₀, θ^2*I(dim))
+    else 
+        k_prior = WassersteinBayesRepulsiveGMM.BRGMPrior(dim, a, b, l_σ2, u_σ2, τ) 
+    end 
 
     mc_samples = wrbgmm_blocked_gibbs(
         X; g₀=g₀, K=K, β=β, τ=τ, k_prior=k_prior, 
