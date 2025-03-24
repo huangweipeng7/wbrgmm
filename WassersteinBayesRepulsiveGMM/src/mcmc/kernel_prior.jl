@@ -1,5 +1,26 @@
 abstract type KernelPrior end 
 
+
+@inline function post_sample_gauss!(
+    X, Mu, Sig, C, k_prior::KernelPrior)
+
+    K = size(Mu, 2)
+    @inbounds for k in 1:K
+        Xₖ = X[:, C .== k] 
+        n = size(Xₖ, 2)  
+        
+        μ, Σ = n == 0 ? 
+            rand(k_prior) : 
+            post_sample_gauss(Xₖ, Mu[:, :, k], Sig[:, :, k], k_prior)
+         
+        Mu[:, k] .= μ[:] 
+        Sig[:, :, k] .= Σ[:, :]
+    end 
+end 
+
+
+############################################################ 
+
 struct WGRMPrior <: KernelPrior
     dim::Int
     smvn::ScaleMvNormal
@@ -65,23 +86,6 @@ function rand(prior::WGRMPrior; max_cnt=2000)
 end 
 
 
-@inline function post_sample_gauss!(
-    X, Mu, Sig, C, k_prior::WGRMPrior)
-
-    K = size(Mu, 2)
-    @inbounds for k in 1:K
-        Xₖ = X[:, C .== k] 
-        n = size(Xₖ, 2)  
-        
-        μ, Σ = n == 0 ? 
-            rand(k_prior) : 
-            post_sample_gauss(Xₖ, Mu[:, :, k], Sig[:, :, k], k_prior)
-         
-        Mu[:, k] .= μ[:] 
-        Sig[:, :, k] .= Σ[:, :]
-    end 
-end 
-
 
 @inline function post_sample_gauss(X, μ, Σ, k_prior::WGRMPrior)
     """ A function for the posterior sampling of Gaussian kernels.
@@ -134,39 +138,21 @@ function rand(prior::BGRMPrior; max_cnt=2000)
 end 
 
 
-function post_sample_gauss_kernels_mc(X, ℓ, t_max, Mu, Sig, C, config::Dict; n_mc=20) 
-    g₀ = config["g₀"] 
-    a₀ = config["a₀"] 
-    b₀ = config["b₀"]
-    τ = config["τ"]
-
-    dim = size(Mu, 1)  
-    K = ℓ + t_max - 1
-    Mu_mc = zeros(Float64, dim, K, n_mc)
-    Sig_mc = zeros(Float64, dim, dim, K, n_mc)
+function post_sample_gauss(X, μ, Σ, k_prior::BGRMPrior)
+    dim, n = size(X)
     
-    normal = MvNormal(zeros(dim), τ^2) 
-    @inbounds for k in 1:K
-        X_tmp = X[:, C.==k] 
-        n = size(X_tmp, 2) 
+    x_sum = sum(X; dims=2)  
+    Σ₀ = inv(τ^(-2)*I + n * inv(Σ))
+    μ₀ = Σ₀ * (inv(Σ) * x_sum) |> vec 
+    μ = rand(MvNormal(μ₀, Σ₀), n_mc)
 
-        if n == 0 
-            @inbounds Mu_mc[:, k, :] .= rand(normal, n_mc)
-            for mc = 1:n_mc
-                @inbounds Sig_mc[:, :, k, mc] .= rand_inv_gamma(a₀, b₀, config)
-            end
-        else
-            x_sum = sum(X_tmp; dims=2)  
-            Σ₀ = inv(τ^2*I + n * inv(Sig[:, :, k]))
-            μ₀ = Σ₀ * (inv(Sig[:, :, k]) * x_sum) |> vec 
-            Mu_mc[:, k, :] .= rand(MvNormal(μ₀, Σ₀), n_mc)
+    aₖ = k_prior.a + n / 2 
+    bₖ = (k_prior.b .+ sum((X .- μ).^2; dims=2) / 2) |> vec
+    prior_p = deepcopy(prior)
+    prior_p.a, prior_p.b = aₖ, bₖ
+    Σ = rand_inv_gamma(prior_p; n=n_mc) 
 
-            aₖ = a₀ + n / 2 
-            bₖ = b₀ .+ sum((X_tmp .- Mu[:, k]).^2; dims=2) / 2 |> vec
-            Sig_mc[:, :, k, :] .= rand_inv_gamma(aₖ, bₖ, config; n=n_mc) 
-        end  
-    end 
-    return Mu_mc, Sig_mc
+    return μ, Σ
 end 
 
 
