@@ -1,3 +1,4 @@
+using OrderedCollections
 using DataFrames 
 using Gadfly  
 import Plots, StatsPlots   
@@ -74,38 +75,18 @@ function plot_density_estimate(X, mc_samples, kwargs)
     Plots.contour!(
         x_grid, y_grid, density_matrix, 
         cmap=:linear_tritanopic_krjcw_5_98_c46_n256,
-        levels=30, linewidth=0.7, alpha=0.9)
+        levels=50, linewidth=0.7, alpha=0.9)
  
     Plots.title!("Density Estimate by $(rep_type)")
     # Plots.xlabel!("X") 
     # Plots.ylabel!("Y")
-
-    # method = uppercase(method[1]) * method[2:end]
-    # p = Gadfly.plot(  
-    #     Coord.cartesian(
-    #         xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max), 
-    #     layer(x=X[1, :], y=X[2, :],  
-    #         Theme(
-    #             default_color="white", 
-    #             discrete_highlight_color=c->["black"])),
-    #     layer(z=density_matrix, x=x_grid, y=y_grid,  
-    #         Geom.contour(levels=20), Theme(minor_label_font_size=16pt)), 
-    #     Guide.ylabel(nothing), Guide.xlabel(nothing),
-    #     # Theme(key_position=:none),   
-    #     Scale.color_discrete(
-    #         n -> get(cs.linear_tritanopic_krjcw_5_98_c46_n256, 
-    #             range(0, 1, length=n)))
-    #     )
-    # p = title(
-    #     render(p), 
-    #     "Density Estimation with $(method) Repulsion", 
-    #     Compose.fontsize(17pt))
+ 
     println("Finish plotting\n\n\n") 
     Plots.savefig(p, "./plots/$(dataname)_$(method)_contour.pdf") 
 end 
 
 
-function plot_min_d_all(X, mc_samples_m, mc_samples_w, kwargs)
+function plot_min_d_all(X, mc_sample_dict, kwargs)
     function compute(mc_samples)
         min_d_vec = zeros(length(mc_samples))
         for (k, mc_sample) in enumerate(mc_samples)
@@ -121,36 +102,37 @@ function plot_min_d_all(X, mc_samples_m, mc_samples_w, kwargs)
         min_d_vec 
     end 
 
-    df1 = DataFrame(x=compute(mc_samples_m), method="Mean") 
-    df2 = DataFrame(x=compute(mc_samples_w), method="Wasserstein") 
+    # Plots.plotlyjs()
+    Plots.gr()
+    is_first = true
+    p = nothing 
+    ls = [:solid, :dash, :dot, :dashdotdot]
+    for (i, (method, mc_samples)) in enumerate(mc_sample_dict)  
+        rep_type = @match method begin
+            "mean"          => "MRGM"
+            "brgm"          => "BRGM"
+            "wasserstein"   => "WRGM"
+            "no"            => "DPGM"
+        end  
+        df = DataFrame(x=compute(mc_samples), method=rep_type) 
     
-    # df = vcat(df1, df2)
-        
-    # Plot 
-    # p = plot(vcat(D...),  
-    #     x=:x, color=:method, ymin=[0.], ymax=[0.5],
-    #     Theme(alphas=[0.7]),
-    #     Geom.line, Geom.ribbon,  
-    #     # layer(
-    #     #     Stat.density,
-    #     #     Geom.polygon(fill=true, preserve_order=true)),
-    #     Scale.color_discrete_manual("skyblue", "orange"),
-    #     # Scale.color_discrete_manual(colorant"orange", colorant"green"),
-    #     Guide.colorkey(title=""), 
-    #     Guide.title("KDE of minimal mean distance"), 
-    # ) 
-  
-    Plots.plotlyjs()
-    p = Plots.density(df1.x, label="Mean",
-        color=:black, tickfontsize=11, lw=1.5, top_margin=5Plots.mm, 
-        title="Density of minimal mean distance")
-    Plots.density!(df2.x, label="Wasserstein", color=:black, lw=1.5,
-        linestyle=:dash)
-    
+        if is_first
+            p = Plots.density(df.x, label=rep_type,
+                color=:black, tickfontsize=11, lw=1.5, 
+                top_margin=5Plots.mm, linestyle=ls[i],
+                title="Density of minimal mean distance")
+            is_first = false 
+        else
+            Plots.density!(df.x, label=rep_type, 
+                color=:black, tickfontsize=11, lw=1.5,
+                linestyle=ls[i])
+        end 
+    end 
+
     dataname = kwargs["dataname"]
     # draw(PDF("$(dataname)_min_dist_kde.pdf", 4inch, 3inch), p) 
     println("Finish plotting\n\n\n") 
-    PlotlyKaleido.start()
+    # PlotlyKaleido.start()
     Plots.savefig("./plots/$(dataname)_min_dist_kde.pdf")
 end 
 
@@ -160,9 +142,10 @@ function plot_min_d(X, mc_samples, kwargs)
     method = kwargs["method"]
 
     rep_type = @match method begin
-        "mean" || "brgm"    => "MRGM"
-        "wasserstein"       => "WRGM"
-        "no"                => "DPGM"
+        "mean"          => "MRGM"
+        "brgm"          => "BRGM"
+        "wasserstein"   => "WRGM"
+        "no"            => "DPGM"
     end 
 
     min_d_vec = zeros(length(mc_samples))
@@ -197,15 +180,14 @@ function load_and_plot(kwargs)
     mkpath("./plots/") 
          
     if method == "all"
-        mc_sample_dict = JLD2.load(
-            "results/$(dataname)_mean.jld2")   
-        mc_samples_m = mc_sample_dict["mc_samples"] 
-
-        mc_sample_dict = JLD2.load(
-            "results/$(dataname)_wasserstein.jld2")   
-        mc_samples_w = mc_sample_dict["mc_samples"]
-        
-        plot_min_d_all(X, mc_samples_m, mc_samples_w, kwargs) 
+        mc_sample_dict = OrderedDict( 
+            (
+                method, 
+                JLD2.load("results/$(dataname)_$(method).jld2", "mc_samples")
+            )
+            for method in ["mean", "wasserstein", "no", "brgm"] 
+        )
+        plot_min_d_all(X, mc_sample_dict, kwargs) 
     else
         mc_samples = JLD2.load(
             "results/$(dataname)_$(method).jld2", "mc_samples") 

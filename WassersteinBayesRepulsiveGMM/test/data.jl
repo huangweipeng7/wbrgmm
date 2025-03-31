@@ -10,7 +10,7 @@ function load_data(dataname)
         df_ = df[!, 2:3]
     elseif dataname == "GvHD"
         df_ = df[df.CD3 .> 300, :]
-        df_ = df_[!, [:CD4, :CD8]] 
+        df_ = df_[!, [:CD3, :CD4]] 
     else 
         df_ = df[!, 1:2]
     end  

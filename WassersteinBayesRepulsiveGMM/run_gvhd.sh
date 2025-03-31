@@ -2,10 +2,10 @@
 set -e
 
 data="GvHD" 
-n_burnin=1000
-n_iter=500 
-tau=1e2
-g0=10 
+n_burnin=10000
+n_iter=5000 
+tau=1e4
+g0=20
 nu0=4
 thinning=1 
 
