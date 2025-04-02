@@ -27,7 +27,7 @@ function main(kwargs)
     τ = kwargs["tau"]
     ν₀ = kwargs["nu0"]
     β = 1
-    θ = 1 
+    θ = 1
     l_σ2, u_σ2 = 1e-12, 1e12
     K = 1
     a = 1
@@ -36,11 +36,14 @@ function main(kwargs)
     X = load_data(dataname)
     dim = size(X, 1) 
 
-    if method != "brgm"
+    if method in ["dpgm", "mrgm", "wrgm"]
         k_prior = WassersteinBayesRepulsiveGMM.WRGMPrior(
             τ, zeros(dim), τ^2*I(dim), l_σ2, u_σ2, ν₀, θ^2*I(dim))
-    else 
+    elseif method in ["brgm", "wrgm-diag"]
         k_prior = WassersteinBayesRepulsiveGMM.BRGMPrior(dim, a, b, l_σ2, u_σ2, τ) 
+    else 
+        throw("The method is not supported. 
+            The supported options are brgm, dpgm, mrgm, wrgm, and wrgm-diag")
     end 
 
     mc_samples = wrbgmm_blocked_gibbs(

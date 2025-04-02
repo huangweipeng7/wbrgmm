@@ -20,8 +20,8 @@ function min_distance(Mu, Sig, g₀, method)
     g₀ != 0 || return 1.0
 
     dist_fn = @match method begin 
-        "wasserstein"       => wass_dist_gauss 
-        "mean" || "brgm"    => mean_dist_gauss 
+        "wrgm" || "wrgm-diag"   => wass_dist_gauss 
+        "mrgm" || "brgm"        => mean_dist_gauss 
     end  
 
     hₖ = 1.0

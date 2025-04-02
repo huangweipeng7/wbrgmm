@@ -57,13 +57,7 @@ function plot_density_estimate(X, mc_samples, kwargs)
     density_matrix = reshape(density, (length(y_grid), length(x_grid)))
     println("Finish processing the density estimation computation")
  
-    rep_type = @match method begin
-        "mean"          => "MRGM"
-        "brgm"          => "BRGM"
-        "wasserstein"   => "WRGM"
-        "no"            => "DPGM"
-    end 
-
+    method = uppercase(method)
     # Plot
     logcpo = round(
         mean([mc_sample.llhd for mc_sample in mc_samples]), 
@@ -77,10 +71,8 @@ function plot_density_estimate(X, mc_samples, kwargs)
         cmap=:linear_tritanopic_krjcw_5_98_c46_n256,
         levels=50, linewidth=0.7, alpha=0.9)
  
-    Plots.title!("Density Estimate by $(rep_type)")
-    # Plots.xlabel!("X") 
-    # Plots.ylabel!("Y")
- 
+    Plots.title!("Density Estimate by $(method)") 
+    
     println("Finish plotting\n\n\n") 
     Plots.savefig(p, "./plots/$(dataname)_$(method)_contour.pdf") 
 end 
@@ -108,22 +100,17 @@ function plot_min_d_all(X, mc_sample_dict, kwargs)
     p = nothing 
     ls = [:solid, :dash, :dot, :dashdotdot]
     for (i, (method, mc_samples)) in enumerate(mc_sample_dict)  
-        rep_type = @match method begin
-            "mean"          => "MRGM"
-            "brgm"          => "BRGM"
-            "wasserstein"   => "WRGM"
-            "no"            => "DPGM"
-        end  
-        df = DataFrame(x=compute(mc_samples), method=rep_type) 
+        method = uppercase(method)
+        df = DataFrame(x=compute(mc_samples), method=method) 
     
         if is_first
-            p = Plots.density(df.x, label=rep_type,
+            p = Plots.density(df.x, label=method,
                 color=:black, tickfontsize=11, lw=1.5, 
                 top_margin=5Plots.mm, linestyle=ls[i],
                 title="Density of minimal mean distance")
             is_first = false 
         else
-            Plots.density!(df.x, label=rep_type, 
+            Plots.density!(df.x, label=method, 
                 color=:black, tickfontsize=11, lw=1.5,
                 linestyle=ls[i])
         end 

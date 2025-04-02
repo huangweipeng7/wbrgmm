@@ -17,8 +17,8 @@
     end 
 
     dist_fn = @match method begin 
-        "wasserstein"       => wass_dist_gauss 
-        "mean" || "brgm"    => mean_dist_gauss 
+        "wrgm" || "wrgm-diag"   => wass_dist_gauss 
+        "mrgm" || "brgm"        => mean_dist_gauss 
     end  
 
     gg = zeros(K_max, n_mc) 

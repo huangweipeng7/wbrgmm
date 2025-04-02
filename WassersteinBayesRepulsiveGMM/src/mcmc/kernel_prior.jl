@@ -110,6 +110,7 @@ end
     normal = try 
         MvNormal(μ₀, Σ₀) 
     catch LoadError
+        println(Σ₀)
         Σ₀ = round.(Σ₀, digits=6); 
         MvNormal(μ₀, Σ₀)  
     end 
