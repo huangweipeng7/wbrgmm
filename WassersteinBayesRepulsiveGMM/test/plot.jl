@@ -1,7 +1,8 @@
 using OrderedCollections
 using DataFrames 
 using Gadfly  
-import Plots, StatsPlots   
+import Plots, StatsPlots
+using LinearAlgebra   
 using JLD2   
 using MLStyle
 using Distributions, StatsBase, StatsFuns
@@ -13,10 +14,52 @@ import ColorSchemes as cs
 
 include("./data.jl"); import .load_data
 include("./parse_args.jl"); import .parse_plot_cmd
- 
+
+
+function getellipsepoints(cx, cy, rx, ry, θ)
+    t = range(0, 2*pi, length=100)
+    ellipse_x_r = @. rx * cos(t)
+    ellipse_y_r = @. ry * sin(t)
+    R = [cos(θ) sin(θ); -sin(θ) cos(θ)]
+    r_ellipse = [ellipse_x_r ellipse_y_r] * R
+    x = @. cx + r_ellipse[:,1]
+    y = @. cy + r_ellipse[:,2]
+    (x, y)
+end
+
+
+function getellipsepoints(μ, Σ, confidence=0.95)
+    quant = quantile(Chisq(2), confidence) |> sqrt
+    cx = μ[1]
+    cy = μ[2]
+    
+    egvs = eigvals(Σ)
+    if egvs[1] > egvs[2]
+        idxmax = 1
+        largestegv = egvs[1]
+        smallesttegv = egvs[2]
+    else
+        idxmax = 2
+        largestegv = egvs[2]
+        smallesttegv = egvs[1]
+    end
+
+    rx = quant*sqrt(largestegv)
+    ry = quant*sqrt(smallesttegv)
+    
+    eigvecmax = eigvecs(Σ)[:,idxmax]
+    θ = atan(eigvecmax[2]/eigvecmax[1])
+    if θ < 0
+        θ += 2*π
+    end
+
+    getellipsepoints(cx, cy, rx, ry, θ)
+end
+
    
 function plot_density_estimate(X, mc_samples, kwargs)
     Plots.gr()
+    Plots.theme(:ggplot2; palette = Plots.palette(:dark2))
 
     dataname = kwargs["dataname"]
     method = kwargs["method"]
@@ -24,11 +67,11 @@ function plot_density_estimate(X, mc_samples, kwargs)
     # Generate grid
     x_min, x_max = minimum(X[1, :]) - 1, maximum(X[1, :]) + 1
     y_min, y_max = minimum(X[2, :]) - 1, maximum(X[2, :]) + 1
-    x_grid = range(x_min, x_max, length=120)
-    y_grid = range(y_min, y_max, length=120) 
+    x_grid = range(x_min, x_max, length=20)
+    y_grid = range(y_min, y_max, length=20) 
     xx = repeat(x_grid', length(y_grid), 1)
     yy = repeat(y_grid, 1, length(x_grid))
-    grid_points = hcat(vec(xx), vec(yy)) 
+    grid_points = hcat(vec(xx), vec(yy))  
 
     # Compute density for each grid point
     function compute_density(grid_point)
@@ -63,18 +106,57 @@ function plot_density_estimate(X, mc_samples, kwargs)
         mean([mc_sample.llhd for mc_sample in mc_samples]), 
         digits=3) 
     p = Plots.scatter(X[1, :], X[2, :],  
-        markercolor=:white,
-        # color=:black, alpha=0.3,  
+        markercolor=:gray,
+        # color=:black, 
+        markerstrokewidth=0,
+        alpha=0.7,  
         markersize=2, label="log-CPO: $(logcpo)")
     Plots.contour!(
         x_grid, y_grid, density_matrix, 
-        cmap=:linear_tritanopic_krjcw_5_98_c46_n256,
-        levels=50, linewidth=0.7, alpha=0.9)
+        # cmap=:linear_tritanopic_krjcw_5_98_c46_n256,
+        levels=30, linewidth=0.7, alpha=0.9, cbar=false)
  
     Plots.title!("Density Estimate by $(method)") 
     
     println("Finish plotting\n\n\n") 
     Plots.savefig(p, "./plots/$(dataname)_$(method)_contour.pdf") 
+end 
+
+
+function plot_map_estimate(X, mc_samples, kwargs)
+    Plots.gr()
+    Plots.theme(:ggplot2)
+
+    dataname = kwargs["dataname"]
+    method = kwargs["method"]
+
+    map_est_ind = map(x -> x.lpost, mc_samples) |> argmax
+    mc_sample = mc_samples[map_est_ind] 
+  
+    p = Plots.scatter(X[1, :], X[2, :],  
+        # markercolor=:white, 
+        framestyle=:grid,
+        markersize=2, 
+        label=nothing, 
+        color=mc_sample.C)
+    for k in unique(mc_sample.C)
+        # StatsPlots.covellipse!(
+        #     mc_sample.Mu[:, k], mc_sample.Sig[:, :, k], 
+        #     showaxes=true, 
+        #     fillcolor=:black,
+        #     alpha=0.3, 
+        #     label=nothing)
+        Plots.plot!(
+            getellipsepoints(       
+                mc_sample.Mu[:, k], mc_sample.Sig[:, :, k], 0.95),
+            color=:black, label=nothing
+        )
+    end 
+
+    Plots.title!("MAP Component Estimate by $(method)") 
+    
+    println("Finish plotting\n\n\n") 
+    Plots.savefig(p, "./plots/$(dataname)_$(method)_map.pdf") 
 end 
 
 
@@ -178,7 +260,8 @@ function load_and_plot(kwargs)
     else
         mc_samples = JLD2.load(
             "results/$(dataname)_$(method).jld2", "mc_samples") 
-        plot_density_estimate(X, mc_samples, kwargs)
+        # plot_density_estimate(X, mc_samples, kwargs)
+        plot_map_estimate(X, mc_samples, kwargs)
     end   
 end 
 

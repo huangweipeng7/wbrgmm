@@ -10,29 +10,28 @@ nu0=4
 thinning=1 
 
 
+# julia -t4 ./test/run.jl \
+# 	--dataname $data \
+# 	--method wrgm-diag \
+# 	--n_burnin $n_burnin \
+# 	--n_iter $n_iter \
+# 	--thinning $thinning \
+# 	--tau $tau \
+# 	--g0 $g0 \
+# 	--nu0 $nu0 
+# #########################################
 
-julia -t4 ./test/run.jl \
-	--dataname $data \
-	--method wrgm-diag \
-	--n_burnin $n_burnin \
-	--n_iter $n_iter \
-	--thinning $thinning \
-	--tau $tau \
-	--g0 $g0 \
-	--nu0 $nu0 
-#########################################
 
-
-julia -t4 ./test/run.jl \
-	--dataname $data \
-	--method brgm \
-	--n_burnin $n_burnin \
-	--n_iter $n_iter \
-	--thinning $thinning \
-	--tau $tau \
-	--g0 $g0 \
-	--nu0 $nu0
-##########################################
+# julia -t4 ./test/run.jl \
+# 	--dataname $data \
+# 	--method brgm \
+# 	--n_burnin $n_burnin \
+# 	--n_iter $n_iter \
+# 	--thinning $thinning \
+# 	--tau $tau \
+# 	--g0 $g0 \
+# 	--nu0 $nu0
+# ##########################################
 
 # julia -t4 ./test/run.jl \
 # 	--dataname $data \
