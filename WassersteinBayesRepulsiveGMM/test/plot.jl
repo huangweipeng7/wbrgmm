@@ -67,8 +67,8 @@ function plot_density_estimate(X, mc_samples, kwargs)
     # Generate grid
     x_min, x_max = minimum(X[1, :]) - 1, maximum(X[1, :]) + 1
     y_min, y_max = minimum(X[2, :]) - 1, maximum(X[2, :]) + 1
-    x_grid = range(x_min, x_max, length=15)
-    y_grid = range(y_min, y_max, length=15) 
+    x_grid = range(x_min, x_max, length=100)
+    y_grid = range(y_min, y_max, length=100) 
     xx = repeat(x_grid', length(y_grid), 1)
     yy = repeat(y_grid, 1, length(x_grid))
     grid_points = hcat(vec(xx), vec(yy))  
@@ -135,23 +135,22 @@ function plot_map_estimate(X, mc_samples, kwargs)
     map_est_ind = map(x -> x.lpost, mc_samples) |> argmax
     mc_sample = mc_samples[map_est_ind] 
   
+    method = uppercase(method)
     p = Plots.scatter(X[1, :], X[2, :],  
         # markercolor=:white, 
         framestyle=:grid,
         markersize=2, 
         label=nothing, 
         color=mc_sample.C)
-    for k in unique(mc_sample.C)
-        # StatsPlots.covellipse!(
-        #     mc_sample.Mu[:, k], mc_sample.Sig[:, :, k], 
-        #     showaxes=true, 
-        #     fillcolor=:black,
-        #     alpha=0.3, 
-        #     label=nothing)
+    for k in unique(mc_sample.C) 
         Plots.plot!(
             getellipsepoints(       
-                mc_sample.Mu[:, k], mc_sample.Sig[:, :, k], 0.95),
-            color=:black, label=nothing, xlabel="CD8", ylabel="CD4"
+                mc_sample.Mu[:, k], mc_sample.Sig[:, :, k], 0.95
+            ),
+            color=:black, 
+            label=nothing, 
+            xlabel=ifelse(dataname=="GvHD", "CD8", "x"), 
+            ylabel=ifelse(dataname=="GvHD", "CD4", "y")
         )
     end 
 
@@ -255,7 +254,9 @@ function load_and_plot(kwargs)
                 method, 
                 JLD2.load("results/$(dataname)_$(method).jld2", "mc_samples")
             )
-            for method in ["dpgm", "mrgm", "wrgm", "brgm", "wrgm-diag"] 
+            for method in [
+                "dpgm-full", "dpgm-dig", "rgm-full", "wrgm-full", "rgm", "wrgm-diag"
+            ] 
         )
         plot_min_d_all(X, mc_sample_dict, kwargs) 
     else

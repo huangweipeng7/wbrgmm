@@ -11,10 +11,10 @@ end
 @inline function wrbgmm_blocked_gibbs(
     X; g₀ = 100., β = 1., a₀ = 1., b₀ = 1., τ = 1.,
     l_σ2 = 0.001, u_σ2 = 10000., k_prior = nothing, 
-    K = 5, t_max = 2, method="wasserstein", 
+    K = 5, t_max = 2, method = "wrgm-full", 
     n_burnin = 2000, n_iter = 3000, thinning = 1)
 
-    if method == "dpgm" && g₀ ≠ 0
+    if occursin("dpgm", method) && g₀ ≠ 0
         g₀ = 0. 
         @warn "For a non-repulsion method setting, g₀ has to be 0. 
             Automatic change to g₀ has been done!" 
@@ -36,12 +36,10 @@ end
 
     n_init_comp::Int = min(round(n/8), 30)
     logV = logV_nt(n, β, n_init_comp; λ=1)
-    Zₖ = method != "no" ?
-        numerical_Zₖ(n_init_comp, dim, config, k_prior) :
-        ones(n_init_comp)
-    
+    Zₖ = numerical_Zₖ(n_init_comp, dim, config, k_prior)
+
     n_runs = n_burnin + n_iter
-    pbar = Progress(n_runs, barglyphs=BarGlyphs("[=> ]"))
+    pbar = Progress(n_runs, barglyphs=BarGlyphs("[=> ]"), color=:white)
     @inbounds for iter in 1:n_runs 
         C, Mu, Sig, llhd = post_sample_C!(
             X, Mu, Sig, C, logV, Zₖ, k_prior, config) 
@@ -88,7 +86,7 @@ function log_prior(C, Mu, Sig, min_d, Zₖ, k_prior, config)
         logp += logpdf(Dirichlet(K, config["β"]), w)
     end  
 
-    for k in 1:K
+    @inbounds for k in 1:K
         logp += clogpdf(k_prior, Mu[:, k], Sig[:, :, k])
     end 
     logp += - Zₖ[K] + log(min_d) 

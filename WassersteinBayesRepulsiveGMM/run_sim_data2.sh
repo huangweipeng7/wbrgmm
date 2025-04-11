@@ -12,7 +12,7 @@ nu0=4
 
 julia -t8 ./test/run.jl \
 	--dataname $data \
-	--method brgm \
+	--method dpgm-full \
 	--n_burnin $n_burnin \
 	--n_iter $n_iter \
 	--thinning 1 \

@@ -22,7 +22,7 @@ include("logV.jl")
 include("numerical_Zk.jl")
 include("numerical_Zhat.jl")
 
-include("measure/wasserstein.jl")
+include("measure/distance.jl")
 include("mcmc/kernel_prior.jl")
 include("mcmc/blocked_gibbs.jl") 
 

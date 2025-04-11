@@ -6,6 +6,8 @@
     τ = config["τ"]
     method = config["method"]
     
+    !occursin("dpgm", method) || return ones(K_max)
+
     μ_mc = zeros(dim, K_max, n_mc)
     Σ_mc = zeros(dim, dim, K_max, n_mc)
      
@@ -17,8 +19,8 @@
     end 
 
     dist_fn = @match method begin 
-        "wrgm" || "wrgm-diag"       => wass_dist_gauss 
-        "mrgm" || "brgm" || "dpgm"  => mean_dist_gauss 
+        "wrgm-full" || "wrgm-diag"  => wass_dist_gauss 
+        "rgm-full" || "rgm-diag"    => mean_dist_gauss 
     end  
 
     gg = zeros(K_max, n_mc) 
