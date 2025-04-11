@@ -59,7 +59,7 @@ end
    
 function plot_density_estimate(X, mc_samples, kwargs)
     Plots.gr()
-    Plots.theme(:ggplot2; palette = Plots.palette(:dark2))
+    Plots.theme(:ggplot2; palette = Plots.palette(:Dark2))
 
     dataname = kwargs["dataname"]
     method = kwargs["method"]
@@ -67,8 +67,8 @@ function plot_density_estimate(X, mc_samples, kwargs)
     # Generate grid
     x_min, x_max = minimum(X[1, :]) - 1, maximum(X[1, :]) + 1
     y_min, y_max = minimum(X[2, :]) - 1, maximum(X[2, :]) + 1
-    x_grid = range(x_min, x_max, length=20)
-    y_grid = range(y_min, y_max, length=20) 
+    x_grid = range(x_min, x_max, length=15)
+    y_grid = range(y_min, y_max, length=15) 
     xx = repeat(x_grid', length(y_grid), 1)
     yy = repeat(y_grid, 1, length(x_grid))
     grid_points = hcat(vec(xx), vec(yy))  
@@ -110,6 +110,7 @@ function plot_density_estimate(X, mc_samples, kwargs)
         # color=:black, 
         markerstrokewidth=0,
         alpha=0.7,  
+        tickfontsize=11,
         markersize=2, label="log-CPO: $(logcpo)")
     Plots.contour!(
         x_grid, y_grid, density_matrix, 
@@ -119,7 +120,8 @@ function plot_density_estimate(X, mc_samples, kwargs)
     Plots.title!("Density Estimate by $(method)") 
     
     println("Finish plotting\n\n\n") 
-    Plots.savefig(p, "./plots/$(dataname)_$(method)_contour.pdf") 
+    mkpath("./plots/$(dataname)")
+    Plots.savefig(p, "./plots/$(dataname)/$(dataname)_$(method)_contour.pdf") 
 end 
 
 
@@ -149,14 +151,15 @@ function plot_map_estimate(X, mc_samples, kwargs)
         Plots.plot!(
             getellipsepoints(       
                 mc_sample.Mu[:, k], mc_sample.Sig[:, :, k], 0.95),
-            color=:black, label=nothing
+            color=:black, label=nothing, xlabel="CD8", ylabel="CD4"
         )
     end 
 
     Plots.title!("MAP Component Estimate by $(method)") 
     
     println("Finish plotting\n\n\n") 
-    Plots.savefig(p, "./plots/$(dataname)_$(method)_map.pdf") 
+    mkpath("./plots/$(dataname)")
+    Plots.savefig(p, "./plots/$(dataname)/$(dataname)_$(method)_map.pdf") 
 end 
 
 
@@ -180,7 +183,7 @@ function plot_min_d_all(X, mc_sample_dict, kwargs)
     Plots.gr()
     is_first = true
     p = nothing 
-    ls = [:solid, :dash, :dot, :dashdotdot]
+    ls = [:solid, :dash, :dot, :dashdot]
     for (i, (method, mc_samples)) in enumerate(mc_sample_dict)  
         method = uppercase(method)
         df = DataFrame(x=compute(mc_samples), method=method) 
@@ -188,13 +191,16 @@ function plot_min_d_all(X, mc_sample_dict, kwargs)
         if is_first
             p = Plots.density(df.x, label=method,
                 color=:black, tickfontsize=11, lw=1.5, 
-                top_margin=5Plots.mm, linestyle=ls[i],
+                top_margin=5Plots.mm, 
+                # linestyle=ls[i],
                 title="Density of minimal mean distance")
             is_first = false 
         else
             Plots.density!(df.x, label=method, 
-                color=:black, tickfontsize=11, lw=1.5,
-                linestyle=ls[i])
+                # color=:black,
+                tickfontsize=11, lw=1.5, 
+                # linestyle=ls[i]
+            )
         end 
     end 
 
@@ -202,20 +208,14 @@ function plot_min_d_all(X, mc_sample_dict, kwargs)
     # draw(PDF("$(dataname)_min_dist_kde.pdf", 4inch, 3inch), p) 
     println("Finish plotting\n\n\n") 
     # PlotlyKaleido.start()
-    Plots.savefig("./plots/$(dataname)_min_dist_kde.pdf")
+    mkpath("./plots/$(dataname)")
+    Plots.savefig("./plots/$(dataname)/$(dataname)_min_dist_kde.pdf")
 end 
 
 
 function plot_min_d(X, mc_samples, kwargs)
     dataname = kwargs["dataname"]
-    method = kwargs["method"]
-
-    rep_type = @match method begin
-        "mean"          => "MRGM"
-        "brgm"          => "BRGM"
-        "wasserstein"   => "WRGM"
-        "no"            => "DPGM"
-    end 
+    method = kwargs["method"] 
 
     min_d_vec = zeros(length(mc_samples))
     for (k, mc_sample) in enumerate(mc_samples)
@@ -234,7 +234,8 @@ function plot_min_d(X, mc_samples, kwargs)
         Stat.density, 
         Guide.title("KDE of minimal mean distance with $(method) Repulsion")) 
  
-    draw(PDF("$(dataname)_min_dist.pdf", 4inch, 3inch), p)
+    mkpath("./plots/$(dataname)")
+    draw(PDF("./plots/$(dataname)/$(dataname)_min_dist.pdf", 4inch, 3inch), p)
     println("Finish plotting\n\n\n")
 end 
 
@@ -254,13 +255,13 @@ function load_and_plot(kwargs)
                 method, 
                 JLD2.load("results/$(dataname)_$(method).jld2", "mc_samples")
             )
-            for method in ["mean", "wasserstein", "no", "brgm"] 
+            for method in ["dpgm", "mrgm", "wrgm", "brgm", "wrgm-diag"] 
         )
         plot_min_d_all(X, mc_sample_dict, kwargs) 
     else
         mc_samples = JLD2.load(
             "results/$(dataname)_$(method).jld2", "mc_samples") 
-        # plot_density_estimate(X, mc_samples, kwargs)
+        plot_density_estimate(X, mc_samples, kwargs)
         plot_map_estimate(X, mc_samples, kwargs)
     end   
 end 

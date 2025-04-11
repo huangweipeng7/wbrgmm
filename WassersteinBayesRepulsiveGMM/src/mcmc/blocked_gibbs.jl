@@ -14,7 +14,7 @@ end
     K = 5, t_max = 2, method="wasserstein", 
     n_burnin = 2000, n_iter = 3000, thinning = 1)
 
-    if method == "no" && g₀ ≠ 0
+    if method == "dpgm" && g₀ ≠ 0
         g₀ = 0. 
         @warn "For a non-repulsion method setting, g₀ has to be 0. 
             Automatic change to g₀ has been done!" 
@@ -34,7 +34,7 @@ end
     Sig = zeros(dim, dim, K+1)
     initialize!(X, Mu, Sig, C, k_prior, config)  
 
-    n_init_comp::Int = min(round(n/8), 20)
+    n_init_comp::Int = min(round(n/8), 30)
     logV = logV_nt(n, β, n_init_comp; λ=1)
     Zₖ = method != "no" ?
         numerical_Zₖ(n_init_comp, dim, config, k_prior) :

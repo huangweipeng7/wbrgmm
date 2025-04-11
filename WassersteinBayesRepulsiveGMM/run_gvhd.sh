@@ -35,7 +35,7 @@ thinning=1
 
 # julia -t4 ./test/run.jl \
 # 	--dataname $data \
-# 	--method mean \
+# 	--method mrgm \
 # 	--n_burnin $n_burnin \
 # 	--n_iter $n_iter \
 # 	--thinning $thinning \
@@ -46,19 +46,19 @@ thinning=1
 
 # julia -t4 ./test/run.jl \
 # 	--dataname $data \
-# 	--method wasserstein \
+# 	--method wrgm \
 # 	--n_burnin $n_burnin \
 # 	--n_iter $n_iter \
 # 	--thinning $thinning \
 # 	--tau $tau \
 # 	--g0 $g0 \
 # 	--nu0 $nu0  
-# #######################################
+#######################################
 
 
 # julia -t4 ./test/run.jl \
 # 	--dataname $data \
-# 	--method no \
+# 	--method dpgm \
 # 	--n_burnin $n_burnin \
 # 	--n_iter $n_iter \
 # 	--thinning $thinning \
@@ -72,10 +72,10 @@ julia -t8 ./test/plot.jl --dataname $data --method wrgm-diag
 
 julia -t8 ./test/plot.jl --dataname $data --method brgm  
 
-# julia -t8 ./test/plot.jl --dataname $data --method mean  
+julia -t8 ./test/plot.jl --dataname $data --method mrgm  
 
-# julia -t8 ./test/plot.jl --dataname $data --method wasserstein
+julia -t8 ./test/plot.jl --dataname $data --method wrgm
 
-# julia -t8 ./test/plot.jl --dataname $data --method no
+julia -t8 ./test/plot.jl --dataname $data --method dpgm
 
-# julia -t8 ./test/plot.jl --dataname $data --method all 
+julia -t8 ./test/plot.jl --dataname $data --method all 
