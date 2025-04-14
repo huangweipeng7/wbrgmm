@@ -55,6 +55,10 @@ function parse_plot_cmd()
             help = "method name: either mean, wasserstein, or none"
             arg_type = String
             required = true  
+        "--dist_type"
+            help = "distance type: either mean or wasserstein"
+            arg_type = String
+            required = false  
     end
  
     return parse_args(s)

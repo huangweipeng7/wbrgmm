@@ -15,6 +15,5 @@ function load_data(dataname)
         df_ = df[!, 1:2]
     end  
 
-    print(size(df_))
     return df_ |> Matrix |> transpose 
 end  

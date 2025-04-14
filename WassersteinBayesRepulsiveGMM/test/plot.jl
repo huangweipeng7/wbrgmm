@@ -110,12 +110,14 @@ function plot_density_estimate(X, mc_samples, kwargs)
         # color=:black, 
         markerstrokewidth=0,
         alpha=0.7,  
-        tickfontsize=11,
+        tickfontsize=10,
+        xlabel=ifelse(dataname=="GvHD", "CD8", "x"), 
+        ylabel=ifelse(dataname=="GvHD", "CD4", "y"),
         markersize=2, label="log-CPO: $(logcpo)")
     Plots.contour!(
         x_grid, y_grid, density_matrix, 
-        # cmap=:linear_tritanopic_krjcw_5_98_c46_n256,
-        levels=50, linewidth=0.7, alpha=0.9, cbar=false)
+        cmap=:bone, #:linear_tritanopic_krjcw_5_98_c46_n256,
+        levels=25, linewidth=0.7, alpha=0.9, cbar=false)
  
     Plots.title!("Density Estimate by $(method)") 
     
@@ -141,6 +143,9 @@ function plot_map_estimate(X, mc_samples, kwargs)
         framestyle=:grid,
         markersize=2, 
         label=nothing, 
+        tickfontsize=10,
+        xlabel=ifelse(dataname=="GvHD", "CD8", "x"), 
+        ylabel=ifelse(dataname=="GvHD", "CD4", "y"),
         color=mc_sample.C)
     for k in unique(mc_sample.C) 
         Plots.plot!(
@@ -149,8 +154,6 @@ function plot_map_estimate(X, mc_samples, kwargs)
             ),
             color=:black, 
             label=nothing, 
-            xlabel=ifelse(dataname=="GvHD", "CD8", "x"), 
-            ylabel=ifelse(dataname=="GvHD", "CD4", "y")
         )
     end 
 
@@ -163,6 +166,8 @@ end
 
 
 function plot_min_d_all(X, mc_sample_dict, kwargs)
+    dist_type = kwargs["dist_type"] 
+    
     function compute(mc_samples)
         min_d_vec = zeros(length(mc_samples))
         for (k, mc_sample) in enumerate(mc_samples)
@@ -170,7 +175,15 @@ function plot_min_d_all(X, mc_sample_dict, kwargs)
             d_mat = fill(Inf, K, K)
             indices = filter(c -> c[1] < c[2], CartesianIndices((1:K, 1:K)))
             Threads.@threads for (i, j) in Tuple.(indices) 
-                d = (mc_sample.Mu[:, i] .- mc_sample.Mu[:, j]) .^2 |> sum |> sqrt
+                if dist_type == "Mean"
+                    d = (mc_sample.Mu[:, i] .- mc_sample.Mu[:, j]) .^2 |> sum |> sqrt
+                elseif dist_type == "Wasserstein" 
+                    d = wass_dist_gauss(
+                        mc_sample.Mu[:, i], mc_sample.Sig[:, :, i],
+                        mc_sample.Mu[:, j], mc_sample.Sig[:, :, j])
+                else 
+                    throw("Distance type not supported")
+                end 
                 d_mat[i, j] = d 
             end 
             min_d_vec[k] = minimum(d_mat)  
@@ -189,15 +202,16 @@ function plot_min_d_all(X, mc_sample_dict, kwargs)
     
         if is_first
             p = Plots.density(df.x, label=method,
-                color=:black, tickfontsize=11, lw=1.5, 
+                # color=:black, 
+                tickfontsize=10, lw=1.5, 
                 top_margin=5Plots.mm, 
                 # linestyle=ls[i],
-                title="Density of minimal mean distance")
+                title="Density of Minimal Inter-component $(dist_type) Distance")
             is_first = false 
         else
             Plots.density!(df.x, label=method, 
                 # color=:black,
-                tickfontsize=11, lw=1.5, 
+                tickfontsize=10, lw=1.5, 
                 # linestyle=ls[i]
             )
         end 
