@@ -8,6 +8,7 @@ using MLStyle
 using Distributions, StatsBase, StatsFuns
 using WassersteinBayesRepulsiveGMM 
  
+import PlotlyBase
 import PlotlyKaleido   
 import Cairo, Compose, Fontconfig
 import ColorSchemes as cs
@@ -112,7 +113,7 @@ function plot_density_estimate(X, mc_samples, kwargs)
     # Plot
 
     Plots.plotlyjs()
-    Plots.theme(:dao)
+    Plots.theme(:ggplot2)
 
     logcpo = round(
         mean([mc_sample.llhd for mc_sample in mc_samples]), 
@@ -120,6 +121,7 @@ function plot_density_estimate(X, mc_samples, kwargs)
     p = Plots.scatter(X[1, :], X[2, :],  
         markercolor=:gray,
         markerstrokewidth=0,
+        leg=:top,
         alpha=0.7,  
         tickfontsize=10,
         xlabel=ifelse(dataname=="GvHD", "CD8", "x"), 
@@ -128,7 +130,7 @@ function plot_density_estimate(X, mc_samples, kwargs)
     Plots.contour!(
         x_grid, y_grid, density_matrix, 
         cmap=:bone, #:linear_tritanopic_krjcw_5_98_c46_n256,
-        levels=35, linewidth=0.7, alpha=0.9, cbar=false)
+        levels=50, linewidth=0.8, alpha=1, cbar=false)
  
     Plots.title!("Density Estimate by $(method)") 
     
@@ -140,9 +142,7 @@ function plot_density_estimate(X, mc_samples, kwargs)
 end 
 
 
-function plot_map_estimate(X, mc_samples, kwargs) 
-    Plots.theme(:default)
-
+function plot_map_estimate(X, mc_samples, kwargs)  
     dataname = kwargs["dataname"]
     method = kwargs["method"]
 
@@ -151,6 +151,7 @@ function plot_map_estimate(X, mc_samples, kwargs)
   
     method = uppercase(method)
     Plots.plotlyjs()
+    Plots.theme(:ggplot2)
     p = Plots.scatter(X[1, :], X[2, :],  
         # markercolor=:white, 
         framestyle=:grid,

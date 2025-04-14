@@ -1,46 +1,35 @@
 #!/bin/bash
 set -e
 
-data="sim_data1"
 
-# julia -t4 ./test/run.jl \
-# 	--dataname $data \
-# 	--method mean \
-# 	--n_burnin 4000 \
-# 	--n_iter 8000 \
-# 	--thinning 5 \
-# 	--tau 0.1 \
-# 	--g0 0.1 \
-# 	--nu0 5 
+data="sim_data_new_1"
+n_burnin=10000
+n_iter=5000
+tau=100
+g0=5
+nu0=4
+thinning=1
 
-# julia -t8 ./test/plot.jl --dataname $data --method mean  
-# #########################################
-
-
-# julix	a -t4 ./test/run.jl \
-# 	--dataname $data \
-# 	--method wasserstein \
-# 	--n_burnin 4000 \
-# 	--n_iter 8000 \
-# 	--thinning 5 \
-# 	--tau 0.001 \
-# 	--g0 0.1 \
-# 	--nu0 5 
-
-# julia -t8 ./test/plot.jl --dataname $data --method wasserstein  
-# ########################################
-
-
+for method in "rgm-full" "rgm-diag" "wrgm-full" "wrgm-diag" "dpgm-full" "dpgm-diag" 
+do 
 julia -t4 ./test/run.jl \
 	--dataname $data \
-	--method no \
-	--n_burnin 4000 \
-	--n_iter 8000 \
-	--thinning 5 \
-	--tau 0.1 \
-	--g0 0.1 \
-	--nu0 5 
+	--method $method \
+	--n_burnin $n_burnin \
+	--n_iter $n_iter \
+	--thinning $thinning \
+	--tau $tau \
+	--g0 $g0 \
+	--nu0 $nu0  
+done 
+##################################################################################
 
-julia -t8 ./test/plot.jl --dataname $data --method no  
-##########################################
- 
+
+for method in "rgm-full" "rgm-diag" "wrgm-full" "wrgm-diag" "dpgm-full" "dpgm-diag" 
+do 
+	julia -t8 ./test/plot.jl --dataname $data --method $method  
+done
+##################################################################################
+
+
+julia -t8 ./test/plot.jl --dataname $data --method all 
