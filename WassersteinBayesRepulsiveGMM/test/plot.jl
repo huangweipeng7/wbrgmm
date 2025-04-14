@@ -16,6 +16,16 @@ include("./data.jl"); import .load_data
 include("./parse_args.jl"); import .parse_plot_cmd
 
 
+
+function wass_dist(μ₁, Σ₁, μ₂, Σ₂) 
+    Σ₂_sqrt = sqrt(Σ₂) 
+    Σ_part_sqrt = 2 * sqrt(Float64.(Σ₂_sqrt * Σ₁ * Σ₂_sqrt))   
+    μ_part = (μ₁ .- μ₂) .^ 2 
+    Σ_part = Σ₁ .+ Σ₂ .- Σ_part_sqrt 
+    return sqrt(sum(μ_part) + tr(Σ_part)) 
+end
+
+
 function getellipsepoints(cx, cy, rx, ry, θ)
     t = range(0, 2*pi, length=100)
     ellipse_x_r = @. rx * cos(t)
@@ -58,9 +68,7 @@ end
 
    
 function plot_density_estimate(X, mc_samples, kwargs)
-    Plots.gr()
-    Plots.theme(:ggplot2; palette = Plots.palette(:Dark2))
-
+    
     dataname = kwargs["dataname"]
     method = kwargs["method"]
 
@@ -102,12 +110,15 @@ function plot_density_estimate(X, mc_samples, kwargs)
  
     method = uppercase(method)
     # Plot
+
+    Plots.plotlyjs()
+    Plots.theme(:dao)
+
     logcpo = round(
         mean([mc_sample.llhd for mc_sample in mc_samples]), 
         digits=3) 
     p = Plots.scatter(X[1, :], X[2, :],  
         markercolor=:gray,
-        # color=:black, 
         markerstrokewidth=0,
         alpha=0.7,  
         tickfontsize=10,
@@ -117,19 +128,20 @@ function plot_density_estimate(X, mc_samples, kwargs)
     Plots.contour!(
         x_grid, y_grid, density_matrix, 
         cmap=:bone, #:linear_tritanopic_krjcw_5_98_c46_n256,
-        levels=25, linewidth=0.7, alpha=0.9, cbar=false)
+        levels=35, linewidth=0.7, alpha=0.9, cbar=false)
  
     Plots.title!("Density Estimate by $(method)") 
     
     println("Finish plotting\n\n\n") 
     mkpath("./plots/$(dataname)")
+
+    PlotlyKaleido.start()
     Plots.savefig(p, "./plots/$(dataname)/$(dataname)_$(method)_contour.pdf") 
 end 
 
 
-function plot_map_estimate(X, mc_samples, kwargs)
-    Plots.gr()
-    Plots.theme(:ggplot2)
+function plot_map_estimate(X, mc_samples, kwargs) 
+    Plots.theme(:default)
 
     dataname = kwargs["dataname"]
     method = kwargs["method"]
@@ -138,6 +150,7 @@ function plot_map_estimate(X, mc_samples, kwargs)
     mc_sample = mc_samples[map_est_ind] 
   
     method = uppercase(method)
+    Plots.plotlyjs()
     p = Plots.scatter(X[1, :], X[2, :],  
         # markercolor=:white, 
         framestyle=:grid,
@@ -161,11 +174,14 @@ function plot_map_estimate(X, mc_samples, kwargs)
     
     println("Finish plotting\n\n\n") 
     mkpath("./plots/$(dataname)")
+    PlotlyKaleido.start()
     Plots.savefig(p, "./plots/$(dataname)/$(dataname)_$(method)_map.pdf") 
 end 
 
 
 function plot_min_d_all(X, mc_sample_dict, kwargs)
+    Plots.theme(:dao)
+
     dist_type = kwargs["dist_type"] 
     
     function compute(mc_samples)
@@ -177,8 +193,8 @@ function plot_min_d_all(X, mc_sample_dict, kwargs)
             Threads.@threads for (i, j) in Tuple.(indices) 
                 if dist_type == "Mean"
                     d = (mc_sample.Mu[:, i] .- mc_sample.Mu[:, j]) .^2 |> sum |> sqrt
-                elseif dist_type == "Wasserstein" 
-                    d = wass_dist_gauss(
+                elseif dist_type == "Wasserstein"  
+                    d = wass_dist(
                         mc_sample.Mu[:, i], mc_sample.Sig[:, :, i],
                         mc_sample.Mu[:, j], mc_sample.Sig[:, :, j])
                 else 
@@ -191,8 +207,8 @@ function plot_min_d_all(X, mc_sample_dict, kwargs)
         min_d_vec 
     end 
 
-    # Plots.plotlyjs()
-    Plots.gr()
+    Plots.plotlyjs()
+    # Plots.gr()
     is_first = true
     p = nothing 
     ls = [:solid, :dash, :dot, :dashdot]
@@ -200,29 +216,34 @@ function plot_min_d_all(X, mc_sample_dict, kwargs)
         method = uppercase(method)
         df = DataFrame(x=compute(mc_samples), method=method) 
     
+
+        ls = Dict(
+            "DPGM-FULL" => :solid, 
+            "DPGM-DIAG" => :solid,
+            "RGM-FULL"  => :dot, 
+            "RGM-DIAG"  => :dot, 
+            "WRGM-DIAG" => :dashdot, 
+            "WRGM-FULL" => :dashdot,
+        )
         if is_first
-            p = Plots.density(df.x, label=method,
-                # color=:black, 
-                tickfontsize=10, lw=1.5, 
-                top_margin=5Plots.mm, 
-                # linestyle=ls[i],
+            p = Plots.density(df.x, label=method, 
+                tickfontsize=10, lw=2, linestyle=ls[method], 
+                top_margin=5Plots.mm,  
                 title="Density of Minimal Inter-component $(dist_type) Distance")
             is_first = false 
         else
-            Plots.density!(df.x, label=method, 
-                # color=:black,
-                tickfontsize=10, lw=1.5, 
-                # linestyle=ls[i]
+            Plots.density!(
+                df.x, label=method, linestyle=ls[method], tickfontsize=10, lw=2       
             )
         end 
     end 
 
     dataname = kwargs["dataname"]
-    # draw(PDF("$(dataname)_min_dist_kde.pdf", 4inch, 3inch), p) 
     println("Finish plotting\n\n\n") 
-    # PlotlyKaleido.start()
+
     mkpath("./plots/$(dataname)")
-    Plots.savefig("./plots/$(dataname)/$(dataname)_min_dist_kde.pdf")
+    PlotlyKaleido.start()
+    Plots.savefig("./plots/$(dataname)/$(dataname)_$(dist_type)_min_dist_kde.pdf")
 end 
 
 
@@ -241,7 +262,7 @@ function plot_min_d(X, mc_samples, kwargs)
         end 
         min_d_vec[k] = minimum(d_mat)  
     end 
- 
+
     # Plot 
     p = plot(x=min_d_vec, Theme(alphas=[0.6]),
         Stat.density, 
@@ -269,7 +290,7 @@ function load_and_plot(kwargs)
                 JLD2.load("results/$(dataname)_$(method).jld2", "mc_samples")
             )
             for method in [
-                "dpgm-full", "rgm-full", "wrgm-full", "dpgm-diag", "rgm-diag", "wrgm-diag"
+                "dpgm-diag", "dpgm-full", "rgm-diag", "rgm-full","wrgm-diag", "wrgm-full"
             ] 
         )
         plot_min_d_all(X, mc_sample_dict, kwargs) 
