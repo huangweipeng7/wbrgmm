@@ -8,10 +8,11 @@ using MLStyle
 using Distributions, StatsBase, StatsFuns
 using WassersteinBayesRepulsiveGMM 
  
-import PlotlyBase
 import PlotlyKaleido   
 import Cairo, Compose, Fontconfig
 import ColorSchemes as cs
+
+using MathJaxRenderer
 
 include("./data.jl"); import .load_data
 include("./parse_args.jl"); import .parse_plot_cmd
@@ -21,8 +22,8 @@ include("./parse_args.jl"); import .parse_plot_cmd
 function wass_dist(μ₁, Σ₁, μ₂, Σ₂) 
     Σ₂_sqrt = sqrt(Σ₂) 
     Σ_part_sqrt = 2 * sqrt(Float64.(Σ₂_sqrt * Σ₁ * Σ₂_sqrt))   
-    μ_part = (μ₁ .- μ₂) .^ 2 
-    Σ_part = Σ₁ .+ Σ₂ .- Σ_part_sqrt 
+    μ_part = @. (μ₁ - μ₂) ^ 2 
+    Σ_part = @. Σ₁ + Σ₂ - Σ_part_sqrt 
     return sqrt(sum(μ_part) + tr(Σ_part)) 
 end
 
@@ -69,7 +70,6 @@ end
 
    
 function plot_density_estimate(X, mc_samples, kwargs)
-    
     dataname = kwargs["dataname"]
     method = kwargs["method"]
 
@@ -82,10 +82,10 @@ function plot_density_estimate(X, mc_samples, kwargs)
     yy = repeat(y_grid, 1, length(x_grid))
     grid_points = hcat(vec(xx), vec(yy))  
 
+    mc_samples = mc_samples[1:10]
     # Compute density for each grid point
-    function compute_density(grid_point)
-        # total = 0.0
-        p = zeros(length(mc_samples))
+    function compute_density(grid_point) 
+        p = mc_samples |> length |> zeros
         Threads.@threads for i in eachindex(mc_samples)
             cnt = countmap(mc_samples[i].C) 
             pi = [cnt[j] for j in 1:length(unique(mc_samples[i].C))]
@@ -110,34 +110,37 @@ function plot_density_estimate(X, mc_samples, kwargs)
     println("Finish processing the density estimation computation")
  
     method = uppercase(method)
-    # Plot
 
-    Plots.plotlyjs()
-    Plots.theme(:ggplot2)
+    # Plot
+    # Plots.plotlyjs()
+    # PlotlyKaleido.start()
+    Plots.theme(:dao)
 
     logcpo = round(
         mean([mc_sample.llhd for mc_sample in mc_samples]), 
         digits=3) 
-    p = Plots.scatter(X[1, :], X[2, :],  
-        markercolor=:gray,
+    p = Plots.scatter(X[1, :], X[2, :], 
+        framestyle=:grid, 
+        markercolor=:grey,
         markerstrokewidth=0,
-        leg=:top,
+        leg=:best,
         alpha=0.7,  
         tickfontsize=10,
         xlabel=ifelse(dataname=="GvHD", "CD8", "x"), 
         ylabel=ifelse(dataname=="GvHD", "CD4", "y"),
-        markersize=2, label="log-CPO: $(logcpo)")
+        markersize=2, label="log-CPO: $(logcpo)", 
+    )
     Plots.contour!(
         x_grid, y_grid, density_matrix, 
-        cmap=:bone, #:linear_tritanopic_krjcw_5_98_c46_n256,
-        levels=50, linewidth=0.8, alpha=1, cbar=false)
+        cmap=:lajolla100,  
+        levels=25, linewidth=0.5, alpha=1, cbar=false,
+    )
  
     Plots.title!("Density Estimate by $(method)") 
     
     println("Finish plotting\n\n\n") 
     mkpath("./plots/$(dataname)")
 
-    PlotlyKaleido.start()
     Plots.savefig(p, "./plots/$(dataname)/$(dataname)_$(method)_contour.pdf") 
 end 
 
@@ -150,13 +153,15 @@ function plot_map_estimate(X, mc_samples, kwargs)
     mc_sample = mc_samples[map_est_ind] 
   
     method = uppercase(method)
-    Plots.plotlyjs()
-    Plots.theme(:ggplot2)
-    p = Plots.scatter(X[1, :], X[2, :],  
-        # markercolor=:white, 
+    # Plots.plotlyjs()
+    # PlotlyKaleido.start()
+    Plots.theme(:dao)
+
+    p = Plots.scatter(X[1, :], X[2, :],   
         framestyle=:grid,
+        alpha=1,
         markersize=2, 
-        label=nothing, 
+        label=nothing, #"Log Posterior: $(round(mc_sample.lpost, digits=3))", 
         tickfontsize=10,
         xlabel=ifelse(dataname=="GvHD", "CD8", "x"), 
         ylabel=ifelse(dataname=="GvHD", "CD4", "y"),
@@ -166,8 +171,7 @@ function plot_map_estimate(X, mc_samples, kwargs)
             getellipsepoints(       
                 mc_sample.Mu[:, k], mc_sample.Sig[:, :, k], 0.95
             ),
-            color=:black, 
-            label=nothing, 
+            color=:black, label=nothing, linestyle=:dash 
         )
     end 
 
@@ -175,14 +179,11 @@ function plot_map_estimate(X, mc_samples, kwargs)
     
     println("Finish plotting\n\n\n") 
     mkpath("./plots/$(dataname)")
-    PlotlyKaleido.start()
     Plots.savefig(p, "./plots/$(dataname)/$(dataname)_$(method)_map.pdf") 
 end 
 
 
 function plot_min_d_all(X, mc_sample_dict, kwargs)
-    Plots.theme(:dao)
-
     dist_type = kwargs["dist_type"] 
     
     function compute(mc_samples)
@@ -208,16 +209,15 @@ function plot_min_d_all(X, mc_sample_dict, kwargs)
         min_d_vec 
     end 
 
-    Plots.plotlyjs()
-    # Plots.gr()
+    Plots.plotlyjs() 
+    PlotlyKaleido.start()
+    Plots.theme(:dao)
+
     is_first = true
-    p = nothing 
-    ls = [:solid, :dash, :dot, :dashdot]
+    p = nothing  
     for (i, (method, mc_samples)) in enumerate(mc_sample_dict)  
         method = uppercase(method)
-        df = DataFrame(x=compute(mc_samples), method=method) 
-    
-
+        df = DataFrame(x=compute(mc_samples), method=method)  
         ls = Dict(
             "DPGM-FULL" => :solid, 
             "DPGM-DIAG" => :solid,
@@ -243,7 +243,6 @@ function plot_min_d_all(X, mc_sample_dict, kwargs)
     println("Finish plotting\n\n\n") 
 
     mkpath("./plots/$(dataname)")
-    PlotlyKaleido.start()
     Plots.savefig("./plots/$(dataname)/$(dataname)_$(dist_type)_min_dist_kde.pdf")
 end 
 

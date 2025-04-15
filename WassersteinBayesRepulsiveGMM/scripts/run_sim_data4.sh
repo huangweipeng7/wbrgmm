@@ -27,10 +27,10 @@ thinning=1
 
 for method in "rgm-full" "rgm-diag" "wrgm-full" "wrgm-diag" "dpgm-full" "dpgm-diag" 
 do 
-	julia -t8 ./test/plot.jl --dataname $data --method $method  
+	julia -t16 ./test/plot.jl --dataname $data --method $method  
 done
 ##################################################################################
 
 
-julia -t8 ./test/plot.jl --dataname $data --method all --dist_type Mean
-julia -t8 ./test/plot.jl --dataname $data --method all --dist_type Wasserstein
+julia -t16 ./test/plot.jl --dataname $data --method all --dist_type Mean
+julia -t16 ./test/plot.jl --dataname $data --method all --dist_type Wasserstein
