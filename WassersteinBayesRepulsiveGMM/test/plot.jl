@@ -10,9 +10,7 @@ using WassersteinBayesRepulsiveGMM
  
 import PlotlyKaleido   
 import Cairo, Compose, Fontconfig
-import ColorSchemes as cs
-
-using MathJaxRenderer
+import ColorSchemes as cs 
 
 include("./data.jl"); import .load_data
 include("./parse_args.jl"); import .parse_plot_cmd
@@ -82,7 +80,7 @@ function plot_density_estimate(X, mc_samples, kwargs)
     yy = repeat(y_grid, 1, length(x_grid))
     grid_points = hcat(vec(xx), vec(yy))  
 
-    mc_samples = mc_samples[1:10]
+    # mc_samples = mc_samples[1:10]
     # Compute density for each grid point
     function compute_density(grid_point) 
         p = mc_samples |> length |> zeros
@@ -155,7 +153,7 @@ function plot_map_estimate(X, mc_samples, kwargs)
     method = uppercase(method)
     # Plots.plotlyjs()
     # PlotlyKaleido.start()
-    Plots.theme(:dao)
+    Plots.theme(:dao; palette=:tab20)
 
     p = Plots.scatter(X[1, :], X[2, :],   
         framestyle=:grid,
@@ -171,7 +169,7 @@ function plot_map_estimate(X, mc_samples, kwargs)
             getellipsepoints(       
                 mc_sample.Mu[:, k], mc_sample.Sig[:, :, k], 0.95
             ),
-            color=:black, label=nothing, linestyle=:dash 
+            color=:black, label=nothing, linestyle=:dashdot, lw=1 
         )
     end 
 
@@ -243,7 +241,7 @@ function plot_min_d_all(X, mc_sample_dict, kwargs)
     println("Finish plotting\n\n\n") 
 
     mkpath("./plots/$(dataname)")
-    Plots.savefig("./plots/$(dataname)/$(dataname)_$(dist_type)_min_dist_kde.pdf")
+    Plots.savefig("./plots/$(dataname)/$(dataname)_$(dist_type)_min_dist_kde.svg")
 end 
 
 
