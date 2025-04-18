@@ -2,15 +2,15 @@
 set -e
 
 
-data="sim_data_new_4"
+data="sim_data_new_6"
 n_burnin=10000
 n_iter=5000
-tau=100
-g0=10
+tau=10
+g0=5
 nu0=4
 thinning=1
 
-for method in "rgm-full" "rgm-diag" "wrgm-full" "wrgm-diag" "dpgm-full" "dpgm-diag" 
+for method in "rgm-full" "wrgm-full" "dpgm-full"
 do 
 julia -t4 ./test/run.jl \
 	--dataname $data \
@@ -24,7 +24,7 @@ julia -t4 ./test/run.jl \
 done 
 ##################################################################################
 
-for method in "rgm-full" "rgm-diag" "wrgm-full" "wrgm-diag" "dpgm-full" "dpgm-diag" 
+for method in "rgm-full" "wrgm-full" "dpgm-full"
 do 
 	julia -t16 ./test/plot.jl --dataname $data --method $method  
 done

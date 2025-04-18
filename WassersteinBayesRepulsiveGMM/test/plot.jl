@@ -131,7 +131,7 @@ function plot_density_estimate(X, mc_samples, kwargs)
     Plots.contour!(
         x_grid, y_grid, density_matrix, 
         cmap=:lajolla100,  
-        levels=25, linewidth=0.5, alpha=1, cbar=false,
+        levels=20, linewidth=0.5, alpha=1, cbar=false,
     )
  
     Plots.title!("Density Estimate by $(method)") 
@@ -288,7 +288,7 @@ function load_and_plot(kwargs)
                 JLD2.load("results/$(dataname)_$(method).jld2", "mc_samples")
             )
             for method in [
-                "dpgm-diag", "dpgm-full", "rgm-diag", "rgm-full","wrgm-diag", "wrgm-full"
+                "dpgm-full", "rgm-full", "wrgm-full"
             ] 
         )
         plot_min_d_all(X, mc_sample_dict, kwargs) 
