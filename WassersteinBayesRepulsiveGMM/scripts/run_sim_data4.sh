@@ -3,12 +3,12 @@ set -e
 
 
 data="sim_data_new_6"
-n_burnin=10000
-n_iter=5000
-tau=10
+n_burnin=2000
+n_iter=2000
+tau=100
 g0=5
 nu0=4
-thinning=1
+thinning=2
 
 for method in "rgm-full" "wrgm-full" "dpgm-full"
 do 
@@ -30,5 +30,5 @@ do
 done
 ##################################################################################
 
-julia -t16 ./test/plot.jl --dataname $data --method all --dist_type Mean
-julia -t16 ./test/plot.jl --dataname $data --method all --dist_type Wasserstein
+# julia -t16 ./test/plot.jl --dataname $data --method all --dist_type Mean
+# julia -t16 ./test/plot.jl --dataname $data --method all --dist_type Wasserstein
